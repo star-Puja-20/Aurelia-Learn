@@ -12,8 +12,8 @@ import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
 
 const loginSchema = z.object({
-  identifier: z.string().min(1, 'Enter your email or mobile number'),
-  password: z.string().optional(),
+  identifier: z.string().email('Enter a valid email address'),
+  password: z.string().min(1, 'Enter your password'),
 })
 type LoginForm = z.infer<typeof loginSchema>
 
@@ -22,12 +22,9 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<LoginForm>({
+  const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
   })
-  const identifier = watch('identifier', '')
-  const isPhoneLogin = identifier.trim().startsWith('+')
-
   async function onSubmit(data: LoginForm) {
     setIsLoading(true)
     try {
@@ -39,21 +36,6 @@ export default function LoginPage() {
       }
 
       const supabase = createClient()
-      if (isPhoneLogin) {
-        if (!/^\+[1-9]\d{7,14}$/.test(data.identifier.trim())) {
-          throw new Error('Use your mobile number in international format, e.g. +919876543210.')
-        }
-        const { error } = await supabase.auth.signInWithOtp({
-          phone: data.identifier.trim(),
-          options: { shouldCreateUser: false },
-        })
-        if (error) throw error
-        toast.success('A verification code was sent by SMS.')
-        router.push(`/auth/verify-email?contact=${encodeURIComponent(data.identifier.trim())}&type=phone`)
-        return
-      }
-
-      if (!data.password) throw new Error('Enter your password to sign in with email.')
       const { data: signInData, error } = await supabase.auth.signInWithPassword({
         email: data.identifier,
         password: data.password,
@@ -127,14 +109,13 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-5">
             <Input
-              label="Email address or mobile number"
-              type={isPhoneLogin ? 'tel' : 'email'}
-              placeholder={isPhoneLogin ? '+919876543210' : 'teacher@school.com'}
+              label="Email address"
+              type="email"
+              placeholder="teacher@school.com"
               error={errors.identifier?.message}
-              hint="Use +91 followed by your 10-digit mobile number for SMS login"
               {...register('identifier')}
             />
-            <div className={isPhoneLogin ? 'hidden' : ''}>
+            <div>
               <div className="relative">
                 <Input
                   label="Password"
