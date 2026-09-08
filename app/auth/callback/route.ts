@@ -6,15 +6,23 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code')
   const tokenHash = searchParams.get('token_hash')
   const type = searchParams.get('type')
-  const next = searchParams.get('next') ?? '/teacher/dashboard'
 
   if (code || (tokenHash && type)) {
     const supabase = await createClient()
-    const { error } = code
+    const result = code
       ? await supabase.auth.exchangeCodeForSession(code)
-      : await supabase.auth.verifyOtp({ token_hash: tokenHash!, type: type as 'signup' | 'email' | 'recovery' | 'invite' })
-    if (!error) {
-      return NextResponse.redirect(`${origin}${next}`)
+      : await supabase.auth.verifyOtp({
+          token_hash: tokenHash!,
+          type: type as 'signup' | 'email' | 'recovery' | 'invite',
+        })
+
+    if (!result.error) {
+      await supabase.auth.signOut()
+      const successUrl = new URL(`${origin}/auth/verify-email`)
+      successUrl.searchParams.set('verified', '1')
+      const email = result.data?.user?.email ?? searchParams.get('email') ?? ''
+      if (email) successUrl.searchParams.set('email', email)
+      return NextResponse.redirect(successUrl.toString())
     }
   }
 

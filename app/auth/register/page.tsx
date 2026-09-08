@@ -13,13 +13,11 @@ import { createClient } from '@/lib/supabase/client'
 
 const schema = z.object({
   fullName: z.string().min(2, 'Enter your full name'),
-  email: z.string().email('Valid email required').or(z.literal('')),
-  phone: z.string().regex(/^\+[1-9]\d{7,14}$/, 'Use international format, e.g. +919876543210').or(z.literal('')),
+  email: z.string().email('Valid email required'),
   password: z.string().min(8, 'At least 8 characters'),
   confirm: z.string(),
   consent: z.literal(true, { errorMap: () => ({ message: 'Please agree before creating your account' }) }),
-}).refine(d => d.email || d.phone, { message: 'Enter an email address or mobile number', path: ['email'] })
-  .refine(d => d.password === d.confirm, { message: 'Passwords do not match', path: ['confirm'] })
+}).refine(d => d.password === d.confirm, { message: 'Passwords do not match', path: ['confirm'] })
 
 type Form = z.infer<typeof schema>
 
@@ -40,19 +38,17 @@ export default function RegisterPage() {
       }
 
       const supabase = createClient()
-      const contact = data.email || data.phone
       const { data: signupData, error } = await supabase.auth.signUp({
-        ...(data.email ? { email: data.email } : { phone: data.phone }),
+        email: data.email,
         password: data.password,
         options: {
           data: {
             full_name: data.fullName,
-            alternate_phone: data.phone || null,
             privacy_consent: true,
             privacy_consent_at: new Date().toISOString(),
             privacy_policy_version: '2026-09-03',
           },
-          ...(data.email ? { emailRedirectTo: `${window.location.origin}/auth/callback` } : {}),
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       })
 
@@ -62,8 +58,7 @@ export default function RegisterPage() {
         toast.success('Account created successfully!')
         router.push('/teacher/dashboard')
       } else {
-        const contactType = data.email ? 'email' : 'phone'
-        router.push(`/auth/verify-email?contact=${encodeURIComponent(contact ?? '')}&type=${contactType}`)
+        router.push(`/auth/verify-email?contact=${encodeURIComponent(data.email)}&type=email`)
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to create your account.')
@@ -86,9 +81,7 @@ export default function RegisterPage() {
           <CardContent className="p-5 sm:p-8">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-5">
               <Input label="Full name" placeholder="Ms. Sarah Johnson" error={errors.fullName?.message} {...register('fullName')} />
-              <p className="text-xs text-gray-500">Choose email or mobile as your sign-in method. Mobile accounts receive verification codes by SMS.</p>
-              <Input label="Email address (optional)" type="email" placeholder="you@school.com" error={errors.email?.message} {...register('email')} />
-              <Input label="Mobile number (optional)" type="tel" placeholder="+919876543210" hint="Use +91 followed by your 10-digit mobile number" error={errors.phone?.message} {...register('phone')} />
+              <Input label="Email address" type="email" placeholder="you@school.com" error={errors.email?.message} {...register('email')} />
               <Input label="Password" type="password" placeholder="••••••••" error={errors.password?.message} {...register('password')} />
               <Input label="Confirm password" type="password" placeholder="••••••••" error={errors.confirm?.message} {...register('confirm')} />
               <label className="flex items-start gap-3 text-sm text-gray-600">

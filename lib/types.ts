@@ -15,7 +15,6 @@ export type ProgressStatus = 'not_started' | 'in_progress' | 'completed' | 'stru
 export interface DBUser {
   id: string
   email: string | null
-  phone?: string | null
   role: UserRole
   full_name: string
   avatar_url: string | null
