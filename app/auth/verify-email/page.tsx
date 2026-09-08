@@ -13,12 +13,14 @@ import { createClient } from '@/lib/supabase/client'
 export default function VerifyEmailPage() {
   const router = useRouter()
   const [contact, setContact] = useState('')
+  const [verified, setVerified] = useState(false)
   const [resending, setResending] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const value = params.get('contact') ?? params.get('email')
     if (value) setContact(value)
+    setVerified(params.get('verified') === '1')
   }, [])
 
   async function resendCode() {
@@ -42,6 +44,34 @@ export default function VerifyEmailPage() {
     } finally {
       setResending(false)
     }
+  }
+
+  if (verified) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-sky-50 via-cream-100 to-mint-50 flex items-center justify-center p-4 sm:p-6">
+        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
+          <Card className="shadow-lg border-0">
+            <CardContent className="p-6 sm:p-8 text-center space-y-5">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                <Mail className="h-8 w-8" />
+              </div>
+              <div>
+                <h1 className="font-display text-3xl text-navy-800">Email verified</h1>
+                <p className="mt-2 text-sm text-gray-500">
+                  {contact ? `Your email ${contact} has been verified successfully.` : 'Your email has been verified successfully.'}
+                </p>
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-900">
+                Your account is ready. Sign in with your email and password to continue.
+              </div>
+              <Button onClick={() => router.push('/auth/login')} className="w-full" size="lg">
+                Go to sign in
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    )
   }
 
   return (
