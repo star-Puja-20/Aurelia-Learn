@@ -9,13 +9,10 @@ import { LevelBadge } from '@/components/ui/badge'
 import { StudentAvatar } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { getStudentCards } from '@/lib/mock-data'
 import { formatDate, progressColor } from '@/lib/utils'
 import { LEVELS_ORDERED } from '@/lib/constants'
 import type { DBStudent } from '@/lib/types'
 
-
-const TEACHER_ID = 'teacher_1'
 
 export default function StudentsPage() {
   const [savedStudents, setSavedStudents] = useState<DBStudent[]>([])
@@ -43,9 +40,7 @@ export default function StudentsPage() {
       progressPercent: 0,
       isActive: student.is_active,
     }))
-    return [...savedCards, ...getStudentCards(TEACHER_ID).filter(
-      mockStudent => !savedStudents.some(saved => saved.full_name === mockStudent.fullName)
-    )]
+    return savedCards
   }, [savedStudents])
 
   const filtered = useMemo(() => {
@@ -83,7 +78,6 @@ export default function StudentsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search students…"
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 h-10 rounded-xl border-2 border-gray-200 bg-white text-sm focus:outline-none focus:border-sky-400 transition-colors"
@@ -93,7 +87,7 @@ export default function StudentsPage() {
         <Select value={levelFilter} onValueChange={setLevelFilter}>
           <SelectTrigger className="w-40">
             <Filter className="h-4 w-4 text-gray-400 mr-1" />
-            <SelectValue placeholder="All levels" />
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All levels</SelectItem>

@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     if (!process.env.GEMINI_API_KEY) {
       // Simple local scoring without API
       const score = localScore(transcript, expected)
-      return NextResponse.json({ score, feedback: localFeedback(score), source: 'local' })
+      return NextResponse.json({ score, status: scoreStatus(score), feedback: localFeedback(score), expected, source: 'local' })
     }
 
     const prompt = `You are scoring a child's English speaking exercise.
@@ -34,10 +34,11 @@ Score from 0-100 based on:
 - Completeness (full sentence)
 - Appropriateness for the level
 
-Respond with ONLY a JSON object: {"score": number, "feedback": "one encouraging sentence"}`
+Respond with ONLY a JSON object: {"score": number, "status": "correct" | "partially_correct" | "wrong", "feedback": "one encouraging sentence"}`
 
+    const model = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash'
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -53,10 +54,14 @@ Respond with ONLY a JSON object: {"score": number, "feedback": "one encouraging 
     const clean = text.replace(/```json|```/g, '').trim()
     const result = JSON.parse(clean)
 
-    return NextResponse.json({ ...result, source: 'gemini' })
+    const score = Number.isFinite(Number(result.score)) ? Math.max(0, Math.min(100, Number(result.score))) : 0
+    const status = result.status === 'correct' || result.status === 'partially_correct' || result.status === 'wrong'
+      ? result.status
+      : scoreStatus(score)
+    return NextResponse.json({ score, status, feedback: typeof result.feedback === 'string' ? result.feedback : localFeedback(score), expected, source: 'gemini' })
   } catch (err) {
     console.error('[Score]', err)
-    return NextResponse.json({ score: 70, feedback: 'Good try! Keep practising.', source: 'fallback' })
+    return NextResponse.json({ score: 0, status: 'wrong', feedback: 'Keep practising and try again.', expected: '', source: 'fallback' })
   }
 }
 
@@ -73,4 +78,10 @@ function localFeedback(score: number): string {
   if (score >= 70) return 'Great job! Almost perfect! 🌟'
   if (score >= 50) return 'Good try! Let\'s practise a bit more. 💪'
   return 'Keep going — you\'re learning! 🚀'
+}
+
+function scoreStatus(score: number): 'correct' | 'partially_correct' | 'wrong' {
+  if (score >= 85) return 'correct'
+  if (score >= 50) return 'partially_correct'
+  return 'wrong'
 }

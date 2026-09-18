@@ -10,8 +10,15 @@
 ## Step 1: Supabase Setup
 
 1. Create project at supabase.com
-2. Go to **SQL Editor** and run `supabase/migrations/001_schema.sql`
-3. Then run `supabase/migrations/002_seed.sql`
+2. Go to **SQL Editor** and run the migration files in this exact order:
+   - `001_schema.sql` - creates `profiles`, `students`, sessions, and the other base tables
+   - `002_seed.sql` - adds learning content only
+   - `003_privacy_consent_profile_fields.sql`
+   - `004_hash_student_pins.sql`
+   - `005_fix_profile_rls.sql`
+   - `006_phone_auth_profiles.sql`
+   - `007_username_auth.sql` - adds username storage and case-insensitive uniqueness
+3. Run each file completely before running the next one. Do not run `007_username_auth.sql` by itself on a new Supabase project.
 4. Go to **Settings → API** and copy:
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon public key` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`

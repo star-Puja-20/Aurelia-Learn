@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import { TeacherSidebar } from '@/components/layout/teacher-sidebar'
+import { LaunchSessionButton } from '@/components/layout/launch-session-button'
 import { MOCK_TEACHER } from '@/lib/mock-data'
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
@@ -13,6 +14,9 @@ export default async function TeacherLayout({ children }: { children: React.Reac
     <div className="flex h-screen overflow-hidden bg-gray-50">
       <TeacherSidebar teacherName={teacherName} />
       <main className="flex-1 overflow-y-auto lg:pt-0 pt-14">
+        <div className="flex justify-end px-6 py-3 lg:px-8 bg-white border-b border-gray-100">
+          <LaunchSessionButton />
+        </div>
         {children}
       </main>
     </div>

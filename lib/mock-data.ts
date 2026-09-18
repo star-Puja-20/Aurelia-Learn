@@ -3,7 +3,7 @@ import type { DBStudent, DBSession, DBTeacherNote, DBStudentProgress, DBUser, St
 // ─── Mock teacher ─────────────────────────────────────────────
 export const MOCK_TEACHER: DBUser = {
   id: 'teacher_1',
-  email: 'demo@aurelialearn.com',
+  username: 'demo_teacher',
   role: 'teacher',
   full_name: 'Ms. Sarah Johnson',
   avatar_url: null,
@@ -13,7 +13,7 @@ export const MOCK_TEACHER: DBUser = {
 
 export const MOCK_ADMIN: DBUser = {
   id: 'admin_1',
-  email: 'admin@aurelialearn.com',
+  username: 'admin',
   role: 'administrator',
   full_name: 'Admin User',
   avatar_url: null,
@@ -21,81 +21,8 @@ export const MOCK_ADMIN: DBUser = {
   updated_at: '2024-09-01T08:00:00Z',
 }
 
-// ─── Mock students ────────────────────────────────────────────
-export const MOCK_STUDENTS: DBStudent[] = [
-  {
-    id: 'student_1',
-    teacher_id: 'teacher_1',
-    full_name: 'Aisha Patel',
-    pin: '1234',
-    current_level: 'word',
-    avatar_emoji: '🦄',
-    avatar_color: '#4FC3F7',
-    is_active: true,
-    created_at: '2024-09-10T09:00:00Z',
-    updated_at: '2025-01-15T10:00:00Z',
-  },
-  {
-    id: 'student_2',
-    teacher_id: 'teacher_1',
-    full_name: 'Ben Okafor',
-    pin: '5678',
-    current_level: 'letter',
-    avatar_emoji: '🐯',
-    avatar_color: '#FFD54F',
-    is_active: true,
-    created_at: '2024-09-10T09:00:00Z',
-    updated_at: '2025-01-10T11:00:00Z',
-  },
-  {
-    id: 'student_3',
-    teacher_id: 'teacher_1',
-    full_name: 'Clara Mendez',
-    pin: '9012',
-    current_level: 'sentence',
-    avatar_emoji: '🦋',
-    avatar_color: '#CE93D8',
-    is_active: true,
-    created_at: '2024-09-12T09:00:00Z',
-    updated_at: '2025-01-18T14:00:00Z',
-  },
-  {
-    id: 'student_4',
-    teacher_id: 'teacher_1',
-    full_name: 'David Kim',
-    pin: '3456',
-    current_level: 'story',
-    avatar_emoji: '🐼',
-    avatar_color: '#A5D6A7',
-    is_active: true,
-    created_at: '2024-09-08T09:00:00Z',
-    updated_at: '2025-01-20T09:00:00Z',
-  },
-  {
-    id: 'student_5',
-    teacher_id: 'teacher_1',
-    full_name: 'Ella Nguyen',
-    pin: '7890',
-    current_level: 'conversation',
-    avatar_emoji: '🌸',
-    avatar_color: '#F48FB1',
-    is_active: true,
-    created_at: '2024-09-05T09:00:00Z',
-    updated_at: '2025-01-22T16:00:00Z',
-  },
-  {
-    id: 'student_6',
-    teacher_id: 'teacher_1',
-    full_name: 'Felix Owusu',
-    pin: '2468',
-    current_level: 'word',
-    avatar_emoji: '🦁',
-    avatar_color: '#FFAB91',
-    is_active: false,
-    created_at: '2024-09-15T09:00:00Z',
-    updated_at: '2024-12-01T09:00:00Z',
-  },
-]
+// Students are created by teachers and loaded from Supabase.
+export const MOCK_STUDENTS: DBStudent[] = []
 
 // ─── Mock sessions ────────────────────────────────────────────
 export const MOCK_SESSIONS: DBSession[] = [

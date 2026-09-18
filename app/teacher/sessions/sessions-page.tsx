@@ -1,6 +1,7 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Play, Plus, Clock, CheckCircle, XCircle, ChevronRight } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -9,11 +10,10 @@ import { LevelBadge } from '@/components/ui/badge'
 import { StudentAvatar } from '@/components/ui/avatar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { MOCK_SESSIONS, MOCK_STUDENTS } from '@/lib/mock-data'
 import { LEVELS_ORDERED } from '@/lib/constants'
 import { formatDate } from '@/lib/utils'
 import { toast } from 'sonner'
-import type { LearningLevel } from '@/lib/types'
+import type { DBSession, DBStudent, LearningLevel } from '@/lib/types'
 
 const STATUS_ICON = {
   completed: <CheckCircle className="h-4 w-4 text-mint-600" />,
@@ -23,20 +23,30 @@ const STATUS_ICON = {
 }
 
 export default function SessionsPage() {
+  const router = useRouter()
   const [newOpen, setNewOpen] = useState(false)
   const [selStudent, setSelStudent] = useState('')
   const [selLevel, setSelLevel] = useState<LearningLevel>('letter')
   const [creating, setCreating] = useState(false)
+  const [students, setStudents] = useState<DBStudent[]>([])
+  const [sessions, setSessions] = useState<DBSession[]>([])
+  const [loaded, setLoaded] = useState(false)
 
-  const sessions = [...MOCK_SESSIONS]
-    .sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/students').then(response => response.ok ? response.json() : { students: [] }),
+      fetch('/api/sessions').then(response => response.ok ? response.json() : { sessions: [] }),
+    ]).then(([studentData, sessionData]) => {
+      setStudents(studentData.students ?? [])
+      setSessions(sessionData.sessions ?? [])
+    }).finally(() => setLoaded(true))
+  }, [])
 
   async function handleCreate() {
     if (!selStudent) { toast.error('Choose a student first'); return }
     setCreating(true)
-    await new Promise(r => setTimeout(r, 600))
-    toast.success('Session created! Generating AI plan…')
     setNewOpen(false)
+    router.push(`/teacher/ai-centre?studentId=${selStudent}&level=${selLevel}`)
     setCreating(false)
   }
 
@@ -45,7 +55,7 @@ export default function SessionsPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="font-display text-3xl text-navy-800">Sessions</h1>
-          <p className="text-gray-500 text-sm mt-1">{sessions.length} sessions total</p>
+          <p className="text-gray-500 text-sm mt-1">{sessions.length} sessions stored</p>
         </div>
         <Button onClick={() => setNewOpen(true)} className="gap-2">
           <Plus className="h-4 w-4" /> New Session
@@ -53,8 +63,8 @@ export default function SessionsPage() {
       </div>
 
       <div className="space-y-3">
-        {sessions.map((session, i) => {
-          const student = MOCK_STUDENTS.find(s => s.id === session.student_id)
+        {!loaded ? <p className="text-center py-16 text-gray-400">Loading session history…</p> : sessions.map((session, i) => {
+          const student = students.find(s => s.id === session.student_id)
           if (!student) return null
           return (
             <motion.div
@@ -88,6 +98,12 @@ export default function SessionsPage() {
             </motion.div>
           )
         })}
+        {loaded && sessions.length === 0 && (
+          <Card><CardContent className="py-16 text-center text-gray-400">
+            <p className="font-display text-xl mb-2">No session history yet</p>
+            <p className="text-sm">Launch a session and accept teacher-reviewed AI feedback to save it here.</p>
+          </CardContent></Card>
+        )}
       </div>
 
       {/* New session dialog */}
@@ -101,9 +117,9 @@ export default function SessionsPage() {
             <div className="space-y-1.5">
               <label className="text-sm font-semibold text-gray-700">Student</label>
               <Select value={selStudent} onValueChange={setSelStudent}>
-                <SelectTrigger><SelectValue placeholder="Choose a student…" /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {MOCK_STUDENTS.filter(s => s.is_active).map(s => (
+                  {students.filter(s => s.is_active).map(s => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.avatar_emoji} {s.full_name}
                     </SelectItem>

@@ -1,4 +1,5 @@
 'use client'
+
 import { useState } from 'react'
 import { Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,18 +9,14 @@ import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [username, setUsername] = useState('')
+  const [requested, setRequested] = useState(false)
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!email) return
-    setLoading(true)
-    await new Promise(r => setTimeout(r, 600))
-    setSent(true)
-    setLoading(false)
-    toast.success('Reset email sent!')
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!username.trim()) return
+    setRequested(true)
+    toast.success('Password reset request recorded.')
   }
 
   return (
@@ -33,26 +30,16 @@ export default function ForgotPasswordPage() {
         </div>
         <Card>
           <CardContent className="p-8">
-            {sent ? (
-              <div className="text-center py-4">
-                <div className="text-5xl mb-4">📧</div>
-                <p className="font-semibold text-navy-800 mb-2">Check your email</p>
-                <p className="text-gray-500 text-sm">We sent a reset link to <strong>{email}</strong></p>
-                <a href="/auth/login" className="block mt-4 text-sky-500 font-semibold text-sm hover:underline">Back to sign in</a>
+            {requested ? (
+              <div className="text-center py-4 space-y-4">
+                <p className="font-semibold text-navy-800">Request received</p>
+                <p className="text-gray-500 text-sm">An administrator must reset this username account because no email or phone recovery method is configured.</p>
+                <a href="/auth/login" className="block text-sky-500 font-semibold text-sm hover:underline">Back to sign in</a>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
-                <Input
-                  label="Email address"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="teacher@school.com"
-                  required
-                />
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Sending…' : 'Send reset link'}
-                </Button>
+                <Input label="Username" value={username} onChange={event => setUsername(event.target.value)} required />
+                <Button type="submit" className="w-full">Request administrator reset</Button>
                 <p className="text-center text-sm text-gray-500">
                   <a href="/auth/login" className="text-sky-500 font-semibold hover:underline">Back to sign in</a>
                 </p>

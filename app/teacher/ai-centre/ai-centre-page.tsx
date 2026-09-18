@@ -1,16 +1,17 @@
 'use client'
-import React, { useState, useRef } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mic, MicOff, Brain, ChevronRight, RotateCcw, CheckCircle } from 'lucide-react'
+import { Mic, MicOff, Brain, ChevronRight, RotateCcw, CheckCircle, UserPlus } from 'lucide-react'
+import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LevelBadge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { MOCK_STUDENTS } from '@/lib/mock-data'
-import { progressColor } from '@/lib/utils'
+import { AI_SCOPE } from '@/lib/ai-scope'
 import { toast } from 'sonner'
-import type { LearningLevel } from '@/lib/types'
+import type { DBStudent, LearningLevel } from '@/lib/types'
 
 // Exercise content by level
 const EXERCISES: Record<LearningLevel, Array<{ prompt: string; type: 'listen' | 'speak'; expected?: string }>> = {
@@ -41,14 +42,19 @@ const EXERCISES: Record<LearningLevel, Array<{ prompt: string; type: 'listen' | 
   ],
 }
 
-type ExerciseResult = { score: number; feedback: string; transcript: string }
+type ResultStatus = 'correct' | 'partially_correct' | 'wrong'
+type ExerciseResult = { score: number; status: ResultStatus; feedback: string; transcript: string; expected?: string }
 
 export default function AICentrePage() {
-  const [selStudent, setSelStudent] = useState(MOCK_STUDENTS[0].id)
+  const searchParams = useSearchParams()
+  const [students, setStudents] = useState<DBStudent[]>([])
+  const [selStudent, setSelStudent] = useState(searchParams.get('studentId') ?? '')
+  const [studentsLoaded, setStudentsLoaded] = useState(false)
   const [exerciseIdx, setExerciseIdx] = useState(0)
   const [recording, setRecording] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<ExerciseResult | null>(null)
+  const [feedbackDecision, setFeedbackDecision] = useState<'accepted' | 'rejected' | null>(null)
   const [sessionScores, setSessionScores] = useState<number[]>([])
   const [generatingPlan, setGeneratingPlan] = useState(false)
   const [plan, setPlan] = useState('')
@@ -56,7 +62,52 @@ export default function AICentrePage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
-  const student = MOCK_STUDENTS.find(s => s.id === selStudent) ?? MOCK_STUDENTS[0]
+  useEffect(() => {
+    fetch('/api/students')
+      .then(response => response.ok ? response.json() : { students: [] })
+      .then(data => {
+        const loadedStudents = data.students ?? []
+        setStudents(loadedStudents)
+        if (!selStudent && loadedStudents[0]) setSelStudent(loadedStudents[0].id)
+      })
+      .catch(() => setStudents([]))
+      .finally(() => setStudentsLoaded(true))
+  }, [selStudent])
+
+  const student = students.find(s => s.id === selStudent)
+
+  if (!student && !studentsLoaded) {
+    return <div className="p-6 lg:p-8 text-center text-gray-400">Loading students…</div>
+  }
+
+  if (!student) {
+    return (
+      <div className="p-6 lg:p-8 max-w-4xl mx-auto">
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Brain className="h-6 w-6 text-sky-500" />
+            <h1 className="font-display text-3xl text-navy-800">AI Learning Centre</h1>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-gray-500 text-sm">Listening &amp; speaking exercises powered by AI</p>
+            <span className="text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-2 py-0.5">
+              {AI_SCOPE.label} · teacher-reviewed
+            </span>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="py-16 text-center">
+            <h2 className="font-display text-2xl text-navy-800 mb-2">Add a student first</h2>
+            <p className="text-gray-500 mb-6">Create a student profile before starting an AI learning session.</p>
+            <Link href="/teacher/students/new">
+              <Button className="gap-2"><UserPlus className="h-4 w-4" /> Add Student</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const level = student.current_level
   const exercises = EXERCISES[level]
   const exercise = exercises[exerciseIdx]
@@ -100,10 +151,10 @@ export default function AICentrePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcript, expected: exercise.expected, level }),
       })
-      const { score, feedback } = await scoreRes.json()
+      const { score, status, feedback, expected } = await scoreRes.json()
 
-      setResult({ score, feedback, transcript })
-      setSessionScores(s => [...s, score])
+      setResult({ score, status, feedback, transcript, expected })
+      setFeedbackDecision(null)
     } catch {
       toast.error('Could not process recording')
     } finally {
@@ -113,14 +164,40 @@ export default function AICentrePage() {
 
   function nextExercise() {
     setResult(null)
+    setFeedbackDecision(null)
     setExerciseIdx(i => Math.min(i + 1, exercises.length - 1))
   }
 
   function resetSession() {
     setExerciseIdx(0)
     setResult(null)
+    setFeedbackDecision(null)
     setSessionScores([])
     setPlan('')
+  }
+
+  async function reviewFeedback(decision: 'accepted' | 'rejected') {
+    if (!result || feedbackDecision) return
+    setFeedbackDecision(decision)
+    const updatedScores = [...sessionScores, result.score]
+    setSessionScores(updatedScores)
+
+    if (updatedScores.length === exercises.length) {
+      const response = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: student!.id,
+          level: student!.current_level,
+          status: 'completed',
+          startedAt: new Date().toISOString(),
+          endedAt: new Date().toISOString(),
+          teacherEdits: `Teacher ${decision} the AI feedback for the completed session.`,
+        }),
+      })
+      if (!response.ok) toast.error('Feedback accepted, but the session history could not be saved.')
+      else toast.success('Session saved to history.')
+    }
   }
 
   async function generatePlan() {
@@ -130,8 +207,8 @@ export default function AICentrePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          studentName: student.full_name,
-          level: student.current_level,
+          studentName: student!.full_name,
+          level: student!.current_level,
           notes: ['Student completed AI Centre exercises'],
           sessionHistory: [],
         }),
@@ -146,9 +223,13 @@ export default function AICentrePage() {
     }
   }
 
-  const avgScore = sessionScores.length
-    ? Math.round(sessionScores.reduce((a, b) => a + b, 0) / sessionScores.length)
-    : 0
+  const sessionStatus = sessionScores.length
+    ? sessionScores.every(score => score >= 85)
+      ? 'correct'
+      : sessionScores.some(score => score < 50)
+        ? 'needs_more_practice'
+        : 'partially_correct'
+    : null
 
   return (
     <div className="p-6 lg:p-8 max-w-4xl mx-auto">
@@ -158,7 +239,12 @@ export default function AICentrePage() {
           <Brain className="h-6 w-6 text-sky-500" />
           <h1 className="font-display text-3xl text-navy-800">AI Learning Centre</h1>
         </div>
-        <p className="text-gray-500 text-sm">Listening &amp; speaking exercises powered by AI</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-gray-500 text-sm">Listening &amp; speaking exercises powered by AI</p>
+          <span className="text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-2 py-0.5">
+            {AI_SCOPE.label} · teacher-reviewed
+          </span>
+        </div>
       </div>
 
       {/* Student selector */}
@@ -167,7 +253,7 @@ export default function AICentrePage() {
           <Select value={selStudent} onValueChange={v => { setSelStudent(v); resetSession() }}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              {MOCK_STUDENTS.filter(s => s.is_active).map(s => (
+              {students.filter(s => s.is_active).map(s => (
                 <SelectItem key={s.id} value={s.id}>{s.avatar_emoji} {s.full_name}</SelectItem>
               ))}
             </SelectContent>
@@ -183,7 +269,7 @@ export default function AICentrePage() {
       <div className="mb-6">
         <div className="flex justify-between text-xs text-gray-500 mb-1">
           <span>Exercise {Math.min(exerciseIdx + 1, exercises.length)} of {exercises.length}</span>
-          {sessionScores.length > 0 && <span>Avg score: <strong>{avgScore}%</strong></span>}
+          {sessionScores.length > 0 && <span>{sessionScores.length} reviewed</span>}
         </div>
         <Progress value={(sessionScores.length / exercises.length) * 100} indicatorColor="#4FC3F7" className="h-2" />
       </div>
@@ -201,17 +287,17 @@ export default function AICentrePage() {
                 <div className="text-6xl mb-4">🎉</div>
                 <h2 className="font-display text-2xl text-navy-800 mb-2">Session Complete!</h2>
                 <p className="text-gray-500 mb-6">
-                  {student.full_name} scored an average of{' '}
-                  <strong className="text-navy-800" style={{ color: progressColor(avgScore) }}>{avgScore}%</strong>
-                  {' '}across {exercises.length} exercises.
+                  {student.full_name}&apos;s session result: <strong className="text-navy-800">
+                    {sessionStatus === 'correct' ? 'Correct' : sessionStatus === 'partially_correct' ? 'Partially correct' : 'Needs more practice'}
+                  </strong> across {exercises.length} exercises.
                 </p>
                 {/* Insights card */}
                 <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 mb-6 text-left">
                   <p className="text-xs font-bold text-sky-600 uppercase tracking-wide mb-1">💡 AI Insight</p>
                   <p className="text-sm text-gray-700">
-                    {avgScore >= 80
+                    {sessionStatus === 'correct'
                       ? `${student.full_name} performed excellently. Consider whether they are ready to progress to the next level.`
-                      : avgScore >= 60
+                      : sessionStatus === 'partially_correct'
                       ? `${student.full_name} is making solid progress. Continue reinforcing this level for one more session.`
                       : `${student.full_name} may need extra support. Consider shorter exercises and more visual aids.`}
                   </p>
@@ -310,26 +396,49 @@ export default function AICentrePage() {
                       className="space-y-3"
                     >
                       <div className={`rounded-xl p-4 border ${
-                        result.score >= 70 ? 'bg-mint-50 border-mint-200' : 'bg-gold-50 border-gold-200'
+                        result.status === 'correct' ? 'bg-mint-50 border-mint-200' :
+                        result.status === 'partially_correct' ? 'bg-gold-50 border-gold-200' :
+                        'bg-coral-50 border-coral-200'
                       }`}>
                         <div className="flex items-center justify-between mb-2">
                           <p className="text-sm font-semibold text-gray-700">You said:</p>
-                          <span className="font-bold text-lg" style={{ color: progressColor(result.score) }}>
-                            {result.score}%
+                          <span className="font-bold text-lg capitalize" style={{ color: result.status === 'correct' ? '#43A047' : result.status === 'partially_correct' ? '#FFB300' : '#E64A19' }}>
+                            {result.status === 'partially_correct' ? 'Partially correct' : result.status}
                           </span>
                         </div>
                         <p className="text-sm text-gray-600 italic">&quot;{result.transcript}&quot;</p>
-                        <p className="text-sm font-semibold mt-2" style={{ color: progressColor(result.score) }}>
+                        <p className="text-sm font-semibold mt-2" style={{ color: result.status === 'correct' ? '#43A047' : result.status === 'partially_correct' ? '#FFB300' : '#E64A19' }}>
                           {result.feedback}
                         </p>
                       </div>
 
+                      <p className="text-xs text-gray-500">
+                        AI feedback is a suggestion. Review it before accepting it into this session&apos;s history.
+                      </p>
+
+                      {result.status === 'wrong' && result.expected && (
+                        <div className="rounded-xl bg-coral-50 border border-coral-200 p-3 text-sm text-coral-800">
+                          <strong>Expected answer:</strong> {result.expected}
+                        </div>
+                      )}
+
+                      {!feedbackDecision && (
+                        <div className="flex gap-3">
+                          <Button onClick={() => reviewFeedback('accepted')} variant="outline" className="flex-1">
+                            Accept feedback
+                          </Button>
+                          <Button onClick={() => reviewFeedback('rejected')} variant="outline" className="flex-1">
+                            Reject feedback
+                          </Button>
+                        </div>
+                      )}
+
                       {exerciseIdx < exercises.length - 1 ? (
-                        <Button onClick={nextExercise} className="w-full gap-2">
+                        <Button onClick={nextExercise} disabled={!feedbackDecision} className="w-full gap-2">
                           Next Exercise <ChevronRight className="h-4 w-4" />
                         </Button>
                       ) : (
-                        <Button onClick={nextExercise} className="w-full gap-2">
+                        <Button onClick={nextExercise} disabled={!feedbackDecision} className="w-full gap-2">
                           See Results <CheckCircle className="h-4 w-4" />
                         </Button>
                       )}

@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { MOCK_TEACHER } from '@/lib/mock-data'
 import { MOCK_STUDENTS, MOCK_SESSIONS } from '@/lib/mock-data'
 import { formatDate } from '@/lib/utils'
-import { Users, BookOpen, Mail } from 'lucide-react'
+import { Users, BookOpen, UserRound } from 'lucide-react'
 
 // In demo mode we have one mock teacher — real app queries profiles table
 const TEACHERS = [MOCK_TEACHER]
@@ -33,8 +33,8 @@ export default function AdminTeachersPage() {
                       <div>
                         <h3 className="font-semibold text-navy-800">{teacher.full_name}</h3>
                         <div className="flex items-center gap-1 text-gray-400 text-sm mt-0.5">
-                          <Mail className="h-3 w-3" />
-                          <span>{teacher.email}</span>
+                          <UserRound className="h-3 w-3" />
+                          <span>{teacher.username}</span>
                         </div>
                       </div>
                       <span className="text-xs bg-mint-100 text-mint-600 px-2 py-1 rounded-full font-semibold capitalize">

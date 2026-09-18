@@ -35,8 +35,19 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## Aurelia Learn setup
 
-Use Node.js 18 or newer. Run `npm install`, copy `.env.example` to `.env.local`, add the Supabase, Gemini, and Groq values, then run `npm run dev`.
+Use Node.js 18 or newer. Run `npm install`, copy `.env.example` to `.env.local`, add the Supabase, Gemini, and Groq values, then run `npm run dev`. The Gemini integration defaults to `gemini-2.0-flash`; set `GEMINI_MODEL` in `.env.local` if your API account exposes a different current model name.
 
 Run the Supabase migrations in order: `001_schema.sql`, `002_seed.sql`, `003_privacy_consent_profile_fields.sql`, `004_hash_student_pins.sql`, and `005_fix_profile_rls.sql`.
 
 Never commit `.env.local` or any file containing real credentials. The application requires verified teacher accounts for real student and AI operations. Student sessions are launched directly without a PIN entry screen.
+
+## AI integration scope
+
+Aurelia Learn has an exact 25% AI integration scope: 4 of 16 defined learning-platform capabilities are AI-assisted. AI is used only for these four teacher-assist tasks:
+
+1. Generating a draft lesson plan from teacher observations.
+2. Transcribing a student's recorded speaking response.
+3. Scoring a speaking exercise and suggesting feedback.
+4. Suggesting a next-session insight after an exercise.
+
+Student enrollment, authentication, session history, progress records, level changes, and final teacher decisions remain application-controlled. AI output is presented as a suggestion and must be reviewed by the teacher before it is accepted into session history. When Gemini or Groq credentials are unavailable, the app uses local development fallbacks rather than silently claiming that an external model was used.

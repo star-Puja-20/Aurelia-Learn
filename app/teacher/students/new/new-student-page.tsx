@@ -32,7 +32,7 @@ export default function NewStudentPage() {
     defaultValues: { level: 'letter' },
   })
 
-  const fullName = watch('fullName') || 'New Student'
+  const fullName = watch('fullName') || ''
   const level = watch('level')
 
   async function onSubmit(data: FormData) {
@@ -133,7 +133,6 @@ export default function NewStudentPage() {
           <CardContent className="space-y-4">
             <Input
               label="Full name"
-              placeholder="e.g. Aisha Patel"
               error={errors.fullName?.message}
               {...register('fullName')}
             />

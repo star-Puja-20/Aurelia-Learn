@@ -10,9 +10,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
+import { normalizeUsername, USERNAME_PATTERN } from '@/lib/auth-validation'
 
 const loginSchema = z.object({
-  identifier: z.string().email('Enter a valid email address'),
+  identifier: z.string().trim().regex(USERNAME_PATTERN, 'Use 3-30 letters, numbers, underscores, or hyphens'),
   password: z.string().min(1, 'Enter your password'),
 })
 type LoginForm = z.infer<typeof loginSchema>
@@ -28,6 +29,7 @@ export default function LoginPage() {
   async function onSubmit(data: LoginForm) {
     setIsLoading(true)
     try {
+      const username = normalizeUsername(data.identifier)
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
       const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       if (!supabaseUrl || supabaseUrl.startsWith('your_') || !supabaseKey || supabaseKey.startsWith('your_')) {
@@ -37,19 +39,15 @@ export default function LoginPage() {
 
       const supabase = createClient()
       const { data: signInData, error } = await supabase.auth.signInWithPassword({
-        email: data.identifier,
+        email: `${username}@accounts.aurelialearn.internal`,
         password: data.password,
       })
 
       if (error) throw error
-      if (!signInData.user.email_confirmed_at) {
-        await supabase.auth.signOut()
-        throw new Error('Please verify your email address before signing in.')
-      }
 
       const { error: profileError } = await supabase.from('profiles').upsert({
         id: signInData.user.id,
-        email: signInData.user.email ?? '',
+        username,
         full_name: signInData.user.user_metadata?.full_name ?? '',
         role: 'teacher',
         privacy_consent: signInData.user.user_metadata?.privacy_consent === true,
@@ -109,9 +107,8 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-5">
             <Input
-              label="Email address"
-              type="email"
-              placeholder="teacher@school.com"
+              label="Username"
+              type="text"
               error={errors.identifier?.message}
               {...register('identifier')}
             />
@@ -120,7 +117,6 @@ export default function LoginPage() {
                 <Input
                   label="Password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
                   error={errors.password?.message}
                   {...register('password')}
                 />
