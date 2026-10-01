@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthenticatedTeacher } from '@/lib/server-auth'
+import { getAuthenticatedTeacherWorkspace } from '@/lib/server-auth'
 import { allowRequest } from '@/lib/rate-limit'
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getAuthenticatedTeacher()
+    const user = await getAuthenticatedTeacherWorkspace()
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }

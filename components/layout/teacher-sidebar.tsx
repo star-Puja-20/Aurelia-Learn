@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Users, BookOpen, Brain, BarChart3,
-  LogOut, Menu, X, Star, ChevronLeft,
+  LogOut, Menu, X, Star, ChevronLeft, ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -47,10 +47,11 @@ function NavItem({ item, collapsed }: { item: typeof NAV_ITEMS[0]; collapsed: bo
   )
 }
 
-export function TeacherSidebar({ teacherName = 'Teacher' }: { teacherName?: string }) {
+export function TeacherSidebar({ teacherName = 'Teacher', isAdministrator = false }: { teacherName?: string; isAdministrator?: boolean }) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const router = useRouter()
+  const pathname = usePathname()
 
   async function handleLogout() {
     await createClient().auth.signOut()
@@ -92,6 +93,18 @@ export function TeacherSidebar({ teacherName = 'Teacher' }: { teacherName?: stri
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {NAV_ITEMS.map(item => <NavItem key={item.href} item={item} collapsed={collapsed} />)}
+        {isAdministrator && (
+          <Link href="/admin/dashboard" className="block">
+            <div className={cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-sm font-semibold',
+              collapsed ? 'justify-center' : '',
+              pathname.startsWith('/admin') ? 'bg-sky-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100 hover:text-navy-800'
+            )} title={collapsed ? 'Admin dashboard' : undefined}>
+              <ShieldCheck className="h-5 w-5 flex-shrink-0" />
+              {!collapsed && <span>Admin dashboard</span>}
+            </div>
+          </Link>
+        )}
       </nav>
 
       {/* Footer */}

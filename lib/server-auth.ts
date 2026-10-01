@@ -19,6 +19,18 @@ export async function getAuthenticatedTeacher() {
   return profile?.role === 'teacher' ? user : null
 }
 
+export async function getAuthenticatedTeacherWorkspace() {
+  const user = await getAuthenticatedUser()
+  if (!user) return null
+  const supabase = await createClient()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+  return profile?.role === 'teacher' || profile?.role === 'administrator' ? user : null
+}
+
 export async function getAuthenticatedAdmin() {
   const user = await getAuthenticatedUser()
   if (!user) return null

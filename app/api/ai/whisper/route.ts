@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthenticatedTeacher } from '@/lib/server-auth'
+import { getAuthenticatedTeacherWorkspace } from '@/lib/server-auth'
 import { allowRequest } from '@/lib/rate-limit'
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getAuthenticatedTeacher()
+    const user = await getAuthenticatedTeacherWorkspace()
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     }
 
     const groqForm = new FormData()
-    groqForm.append('file', audio, 'recording.webm')
+    groqForm.append('file', audio, audio.name || 'recording.webm')
     groqForm.append('model', 'whisper-large-v3')
     groqForm.append('language', 'en')
     groqForm.append('response_format', 'json')

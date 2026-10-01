@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getAuthenticatedTeacher } from '@/lib/server-auth'
+import { getAuthenticatedTeacherWorkspace } from '@/lib/server-auth'
 
 const STUDENT_COLUMNS = 'id, teacher_id, full_name, current_level, avatar_emoji, avatar_color, is_active, created_at, updated_at'
 
 export async function GET() {
   try {
-    const user = await getAuthenticatedTeacher()
+    const user = await getAuthenticatedTeacherWorkspace()
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     const supabase = await createServerClient()
 
@@ -27,7 +27,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthenticatedTeacher()
+    const user = await getAuthenticatedTeacherWorkspace()
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
     const body = await request.json()
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const user = await getAuthenticatedTeacher()
+    const user = await getAuthenticatedTeacherWorkspace()
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
     const body = await request.json()

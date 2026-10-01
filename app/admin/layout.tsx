@@ -1,12 +1,13 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import { LayoutDashboard, Users, Settings, FileText, BarChart3, Star, LogOut } from 'lucide-react'
+import { LayoutDashboard, Users, Settings, FileText, BarChart3, Star, LogOut, BookOpen } from 'lucide-react'
 import { getAuthenticatedAdmin } from '@/lib/server-auth'
 
 const NAV = [
   { label: 'Dashboard',  href: '/admin/dashboard', icon: LayoutDashboard },
   { label: 'Teachers',   href: '/admin/teachers',  icon: Users },
+  { label: 'Teacher workspace', href: '/teacher/dashboard', icon: BookOpen },
   { label: 'Analytics',  href: '/admin/analytics', icon: BarChart3 },
   { label: 'Audit Logs', href: '/admin/audit-logs',icon: FileText },
   { label: 'Settings',   href: '/admin/settings',  icon: Settings },
