@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
-import { normalizeUsername, USERNAME_PATTERN } from '@/lib/auth-validation'
+import { USERNAME_PATTERN } from '@/lib/auth-validation'
 
 const loginSchema = z.object({
   identifier: z.string().trim().regex(USERNAME_PATTERN, 'Use 3-30 letters, numbers, underscores, or hyphens'),
@@ -27,9 +27,14 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
   })
   async function onSubmit(data: LoginForm) {
+    const username = data.identifier
+    if (username !== username.toLowerCase()) {
+      toast.error('Usernames are case-sensitive. Check the uppercase and lowercase letters.')
+      return
+    }
+
     setIsLoading(true)
     try {
-      const username = normalizeUsername(data.identifier)
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
       const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       if (!supabaseUrl || supabaseUrl.startsWith('your_') || !supabaseKey || supabaseKey.startsWith('your_')) {
@@ -45,19 +50,15 @@ export default function LoginPage() {
 
       if (error) throw error
 
-      const { error: profileError } = await supabase.from('profiles').upsert({
-        id: signInData.user.id,
-        username,
-        full_name: signInData.user.user_metadata?.full_name ?? '',
-        role: 'teacher',
-        privacy_consent: signInData.user.user_metadata?.privacy_consent === true,
-        privacy_consent_at: signInData.user.user_metadata?.privacy_consent_at ?? null,
-        privacy_policy_version: signInData.user.user_metadata?.privacy_policy_version ?? null,
-      })
-      if (profileError) throw profileError
+      const { data: profile, error: roleError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', signInData.user.id)
+        .single()
+      if (roleError) throw roleError
 
       toast.success('Welcome back!')
-      router.push('/teacher/dashboard')
+      router.push(profile.role === 'administrator' ? '/admin/dashboard' : '/teacher/dashboard')
       router.refresh()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to sign in.')
