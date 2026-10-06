@@ -1,6 +1,7 @@
 'use client'
 import React, { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { Search, UserPlus, Filter, ChevronRight } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -13,13 +14,17 @@ import { formatDate, progressColor } from '@/lib/utils'
 import { LEVELS_ORDERED } from '@/lib/constants'
 import type { DBStudent } from '@/lib/types'
 
+type StudentListItem = DBStudent & { has_pin: boolean }
 
 export default function StudentsPage() {
-  const [savedStudents, setSavedStudents] = useState<DBStudent[]>([])
+  const [savedStudents, setSavedStudents] = useState<StudentListItem[]>([])
   const [loaded, setLoaded] = useState(false)
   const [search, setSearch] = useState('')
   const [levelFilter, setLevelFilter] = useState<string>('all')
   const [showInactive, setShowInactive] = useState(false)
+  const [pinStudentId, setPinStudentId] = useState<string | null>(null)
+  const [newPin, setNewPin] = useState('')
+  const [savingPin, setSavingPin] = useState(false)
 
   useEffect(() => {
     fetch('/api/students')
@@ -29,6 +34,31 @@ export default function StudentsPage() {
       .finally(() => setLoaded(true))
   }, [])
 
+  async function savePin(studentId: string) {
+    if (!/^\d{6}$/.test(newPin)) {
+      toast.error('Choose a PIN with 6 numbers.')
+      return
+    }
+    setSavingPin(true)
+    try {
+      const response = await fetch('/api/students', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, pin: newPin }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error ?? 'Unable to update the learner PIN.')
+      setSavedStudents((students) => students.map((student) => student.id === studentId ? { ...student, has_pin: true } : student))
+      setPinStudentId(null)
+      setNewPin('')
+      toast.success('Learner PIN updated. Share it privately with the student.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update the learner PIN.')
+    } finally {
+      setSavingPin(false)
+    }
+  }
+
   const allStudents = useMemo(() => {
     const savedCards = savedStudents.map(student => ({
       id: student.id,
@@ -36,6 +66,7 @@ export default function StudentsPage() {
       avatarEmoji: student.avatar_emoji,
       avatarColor: student.avatar_color,
       currentLevel: student.current_level,
+      has_pin: student.has_pin,
       lastSessionDate: null,
       progressPercent: 0,
       isActive: student.is_active,
@@ -127,7 +158,7 @@ export default function StudentsPage() {
               key={student.id}
               variants={{ hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } }}
             >
-              <Link href={`/teacher/students/${student.id}`}>
+              <div>
                 <Card className={`hover:shadow-md transition-all group cursor-pointer ${!student.isActive ? 'opacity-60' : ''}`}>
                   <CardContent className="p-4">
                     <div className="flex items-center gap-4">
@@ -140,7 +171,7 @@ export default function StudentsPage() {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-semibold text-navy-800">{student.fullName}</h3>
+                          <Link href={`/teacher/students/${student.id}`} className="font-semibold text-navy-800 hover:text-sky-600">{student.fullName}</Link>
                           {!student.isActive && (
                             <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Inactive</span>
                           )}
@@ -167,9 +198,26 @@ export default function StudentsPage() {
 
                       <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-gray-500 group-hover:translate-x-1 transition-all flex-shrink-0" />
                     </div>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
+                      <span className={`text-xs font-semibold ${student.has_pin ? 'text-mint-600' : 'text-coral-600'}`}>
+                        {student.has_pin ? 'Student sign-in is ready' : 'Set a learner PIN to enable sign-in'}
+                      </span>
+                      <button type="button" onClick={() => { setPinStudentId(pinStudentId === student.id ? null : student.id); setNewPin('') }} className="text-xs font-bold text-sky-600 hover:underline">
+                        {student.has_pin ? 'Change PIN' : 'Set PIN'}
+                      </button>
+                    </div>
+                    {pinStudentId === student.id && (
+                      <div role="group" aria-label={`Set PIN for ${student.fullName}`} className="mt-3 flex flex-wrap items-end gap-2">
+                        <label className="min-w-40 flex-1 text-xs font-bold text-gray-600">New 6 digit PIN
+                          <input type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={newPin} onChange={(event) => setNewPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm tracking-[.3em] outline-none focus:border-sky-400" />
+                        </label>
+                        <button type="button" disabled={savingPin} onClick={() => void savePin(student.id)} className="h-10 rounded-lg bg-sky-500 px-4 text-xs font-bold text-white disabled:opacity-50">{savingPin ? 'Saving…' : 'Save PIN'}</button>
+                        <button type="button" onClick={() => { setPinStudentId(null); setNewPin('') }} className="h-10 rounded-lg px-3 text-xs font-bold text-gray-500">Cancel</button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
-              </Link>
+              </div>
             </motion.div>
           ))}
         </motion.div>

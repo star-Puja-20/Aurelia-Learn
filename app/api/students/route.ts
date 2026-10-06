@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAuthenticatedTeacherWorkspace } from '@/lib/server-auth'
+import { hashPin } from '@/lib/pin-security'
 
 const STUDENT_COLUMNS = 'id, teacher_id, full_name, current_level, avatar_emoji, avatar_color, is_active, created_at, updated_at'
 
@@ -13,12 +14,14 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from('students')
-      .select(STUDENT_COLUMNS)
+      .select(`${STUDENT_COLUMNS}, pin_hash`)
       .eq('teacher_id', user.id)
       .order('created_at', { ascending: false })
 
     if (error) throw error
-    return NextResponse.json({ students: data ?? [] })
+    return NextResponse.json({
+      students: (data ?? []).map(({ pin_hash, ...student }) => ({ ...student, has_pin: Boolean(pin_hash) })),
+    })
   } catch (error) {
     console.error('[Students GET]', error)
     return NextResponse.json({ error: 'Unable to load students' }, { status: 500 })
@@ -31,10 +34,11 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
     const body = await request.json()
-    const { fullName, level, avatarEmoji, avatarColor } = body
+    const { fullName, level, avatarEmoji, avatarColor, pin } = body
     if (typeof fullName !== 'string' || fullName.length < 2 || fullName.length > 100 ||
       !['letter', 'word', 'sentence', 'story', 'conversation'].includes(level) ||
-      typeof avatarEmoji !== 'string' || typeof avatarColor !== 'string') {
+      typeof avatarEmoji !== 'string' || typeof avatarColor !== 'string' ||
+      typeof pin !== 'string' || !/^\d{6}$/.test(pin)) {
       return NextResponse.json({ error: 'Missing student details' }, { status: 400 })
     }
 
@@ -44,10 +48,10 @@ export async function POST(request: NextRequest) {
       .from('students')
       .insert({
         teacher_id: user.id,
-        full_name: fullName,
+        full_name: fullName.trim(),
         current_level: level,
         pin: null,
-        pin_hash: null,
+        pin_hash: hashPin(pin),
         avatar_emoji: avatarEmoji,
         avatar_color: avatarColor,
       })
@@ -71,13 +75,14 @@ export async function PATCH(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
     const body = await request.json()
-    const { studentId, fullName, level, avatarEmoji, avatarColor, isActive } = body
+    const { studentId, fullName, level, avatarEmoji, avatarColor, isActive, pin } = body
     if (typeof studentId !== 'string' ||
       (fullName !== undefined && (typeof fullName !== 'string' || fullName.trim().length < 2 || fullName.length > 100)) ||
       (level !== undefined && !['letter', 'word', 'sentence', 'story', 'conversation'].includes(level)) ||
       (avatarEmoji !== undefined && typeof avatarEmoji !== 'string') ||
       (avatarColor !== undefined && typeof avatarColor !== 'string') ||
-      (isActive !== undefined && typeof isActive !== 'boolean')) {
+      (isActive !== undefined && typeof isActive !== 'boolean') ||
+      (pin !== undefined && (typeof pin !== 'string' || !/^\d{6}$/.test(pin)))) {
       return NextResponse.json({ error: 'Invalid student details' }, { status: 400 })
     }
 
@@ -87,6 +92,7 @@ export async function PATCH(request: NextRequest) {
     if (avatarEmoji !== undefined) updates.avatar_emoji = avatarEmoji
     if (avatarColor !== undefined) updates.avatar_color = avatarColor
     if (isActive !== undefined) updates.is_active = isActive
+    if (pin !== undefined) updates.pin_hash = hashPin(pin)
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'No changes provided' }, { status: 400 })

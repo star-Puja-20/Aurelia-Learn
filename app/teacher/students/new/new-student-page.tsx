@@ -18,6 +18,7 @@ import type { LearningLevel } from '@/lib/types'
 const schema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
   level: z.enum(['letter', 'word', 'sentence', 'story', 'conversation']),
+  pin: z.string().regex(/^\d{6}$/, 'Choose a 6 digit learner PIN'),
 })
 type FormData = z.infer<typeof schema>
 
@@ -29,7 +30,7 @@ export default function NewStudentPage() {
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { level: 'letter' },
+    defaultValues: { level: 'letter', pin: '' },
   })
 
   const fullName = watch('fullName') || ''
@@ -46,6 +47,7 @@ export default function NewStudentPage() {
           level: data.level,
           avatarEmoji: selectedEmoji,
           avatarColor: selectedColor,
+          pin: data.pin,
         }),
       })
       const result = await response.json()
@@ -155,9 +157,20 @@ export default function NewStudentPage() {
             <div>
               <label className="text-sm font-semibold text-gray-700 block mb-1.5">Session access</label>
               <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-                Student sessions open directly from their assignment and can be launched without a PIN entry screen.
+                Students sign in with their name and this PIN at <strong>/student/login</strong>. Share the PIN privately with the student or their caregiver.
               </div>
             </div>
+
+            <Input
+              label="Learner PIN"
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              maxLength={6}
+              error={errors.pin?.message}
+              hint="Choose 6 numbers. The PIN is stored as a secure hash."
+              {...register('pin')}
+            />
           </CardContent>
         </Card>
 

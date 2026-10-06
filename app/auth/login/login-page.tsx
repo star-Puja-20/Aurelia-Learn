@@ -17,8 +17,9 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Enter your password'),
 })
 type LoginForm = z.infer<typeof loginSchema>
+type LoginRole = 'teacher' | 'administrator'
 
-export default function LoginPage() {
+export default function LoginPage({ requiredRole = 'teacher' }: { requiredRole?: LoginRole }) {
   const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -56,9 +57,14 @@ export default function LoginPage() {
         .eq('id', signInData.user.id)
         .single()
       if (roleError) throw roleError
+      if (profile.role !== requiredRole) {
+        await supabase.auth.signOut()
+        toast.error(requiredRole === 'teacher' ? 'This account is not a teacher account.' : 'This account is not an administrator account.')
+        return
+      }
 
       toast.success('Welcome back!')
-      router.push(profile.role === 'administrator' ? '/admin/dashboard' : '/teacher/dashboard')
+      router.push(requiredRole === 'administrator' ? '/admin/dashboard' : '/teacher/dashboard')
       router.refresh()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to sign in.')
@@ -99,7 +105,7 @@ export default function LoginPage() {
             <Star className="h-8 w-8 text-white fill-white" />
           </motion.div>
           <h1 className="font-display text-3xl text-navy-800">Aurelia Learn</h1>
-          <p className="text-gray-500 text-sm mt-1">Teacher & Administrator Portal</p>
+          <p className="text-gray-500 text-sm mt-1">{requiredRole === 'administrator' ? 'Administrator Portal' : 'Teacher Portal'}</p>
         </div>
 
         {/* Login form */}
@@ -153,13 +159,14 @@ export default function LoginPage() {
           </form>
 
           <p className="text-center text-sm text-gray-500 mt-5">
-            New to Aurelia Learn?{' '}
-            <a href="/auth/register" className="text-sky-500 font-semibold hover:underline">Create an account</a>
+            {requiredRole === 'teacher' ? <>New to Aurelia Learn?{' '}
+              <a href="/auth/register" className="text-sky-500 font-semibold hover:underline">Create a teacher account</a></> :
+              <>Need a teacher account? <a href="/auth/login" className="text-sky-500 font-semibold hover:underline">Teacher sign in</a></>}
           </p>
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-4">
-          Student sessions open directly from their assigned learning links.
+          {requiredRole === 'teacher' && <>Are you an administrator? <a href="/auth/admin" className="font-semibold text-sky-500 hover:underline">Administrator sign in</a></>}
         </p>
       </motion.div>
     </div>
