@@ -8,16 +8,18 @@ import {
   Gift, Home, LockKeyhole, Mic, MoonStar, Sparkles, Trophy, Volume2, X, Zap,
 } from 'lucide-react'
 
-type GameId = 'alphabet' | 'phonics' | 'vocabulary' | 'spelling' | 'sentences' | 'stories' | 'listening' | 'quiz'
-type GameMode = 'pick' | 'spell' | 'sentence' | 'flash'
+type GameId = 'alphabet' | 'phonics' | 'vocabulary' | 'spelling' | 'sentences' | 'stories' | 'listening' | 'quiz' | 'writing'
+type GameMode = 'pick' | 'spell' | 'sentence' | 'flash' | 'blank'
+type ExerciseType = 'missing_letter' | 'missing_word' | 'sentence_completion' | 'story_cloze' | 'dialogue_completion' | 'game_question'
 type Question = {
   prompt: string
   emoji: string
-  choices: string[]
+  choices?: string[]
   answer: string
   mode?: GameMode
   audio?: string
   story?: string
+  exerciseType?: ExerciseType
 }
 type Game = {
   id: GameId
@@ -125,7 +127,75 @@ const games: Game[] = [
       { prompt: 'Which word rhymes with “cat”?', emoji: '🐈', choices: ['hat', 'dog', 'sun'], answer: 'hat' },
     ],
   },
+  {
+    id: 'writing', title: 'Word Workshop', subtitle: 'Type a missing letter or word — no microphone needed',
+    icon: '✍️', category: 'Writing', color: '#edf5ff', iconColor: '#5684c4',
+    questions: [],
+  },
 ]
+
+const writingQuestionSets: Record<string, Question[]> = {
+  letter: [
+    { prompt: 'Type the missing letter: A, __, C', emoji: '🔤', mode: 'blank', exerciseType: 'missing_letter', answer: 'B' },
+    { prompt: 'Finish the alphabet: X, Y, __', emoji: '🔡', mode: 'blank', exerciseType: 'missing_letter', answer: 'Z' },
+    { prompt: 'What is the first letter in “sun”?', emoji: '☀️', mode: 'blank', exerciseType: 'missing_letter', answer: 'S' },
+    { prompt: 'Type the missing letter: D, __, F', emoji: '🧩', mode: 'blank', exerciseType: 'missing_letter', answer: 'E' },
+    { prompt: 'What letter does “moon” start with?', emoji: '🌙', mode: 'blank', exerciseType: 'missing_letter', answer: 'M' },
+    { prompt: 'Complete the word: __ a t', emoji: '🐈', mode: 'blank', exerciseType: 'missing_letter', answer: 'c' },
+    { prompt: 'What comes next? M, N, __', emoji: '🔤', mode: 'blank', exerciseType: 'missing_letter', answer: 'O' },
+    { prompt: 'Type the lowercase letter for BIG D.', emoji: 'Dd', mode: 'blank', exerciseType: 'missing_letter', answer: 'd' },
+    { prompt: 'Fill the gap: G, __, I', emoji: '🔡', mode: 'blank', exerciseType: 'missing_letter', answer: 'H' },
+    { prompt: 'What letter does “pig” start with?', emoji: '🐷', mode: 'blank', exerciseType: 'missing_letter', answer: 'P' },
+  ],
+  word: [
+    { prompt: 'Complete the word: c _ t', emoji: '🐈', mode: 'blank', exerciseType: 'missing_letter', answer: 'a' },
+    { prompt: 'The sky is ___.', emoji: '🌤️', mode: 'blank', exerciseType: 'missing_word', answer: 'blue' },
+    { prompt: 'Complete the word: d o _', emoji: '🐶', mode: 'blank', exerciseType: 'missing_letter', answer: 'g' },
+    { prompt: 'A young dog is a ___.', emoji: '🐕', mode: 'blank', exerciseType: 'missing_word', answer: 'puppy' },
+    { prompt: 'Complete the word: f i s _', emoji: '🐟', mode: 'blank', exerciseType: 'missing_letter', answer: 'h' },
+    { prompt: 'Complete the word: c a _', emoji: '🚗', mode: 'blank', exerciseType: 'missing_letter', answer: 'r' },
+    { prompt: 'We drink ___ when we are thirsty.', emoji: '💧', mode: 'blank', exerciseType: 'missing_word', answer: 'water' },
+    { prompt: 'The opposite of hot is ___.', emoji: '🧊', mode: 'blank', exerciseType: 'missing_word', answer: 'cold' },
+    { prompt: 'Complete the word: b _ ll (a round toy)', emoji: '⚽', mode: 'blank', exerciseType: 'missing_letter', answer: 'a' },
+    { prompt: 'A word that rhymes with “sun” is ___.', emoji: '☀️', mode: 'blank', exerciseType: 'missing_word', answer: 'fun' },
+  ],
+  sentence: [
+    { prompt: 'I ___ to school every day.', emoji: '🎒', mode: 'blank', exerciseType: 'sentence_completion', answer: 'walk' },
+    { prompt: 'The little bird ___ in the tree.', emoji: '🐦', mode: 'blank', exerciseType: 'missing_word', answer: 'sings' },
+    { prompt: 'We ___ playing a game.', emoji: '🎲', mode: 'blank', exerciseType: 'sentence_completion', answer: 'are' },
+    { prompt: 'Mia has ___ orange bag.', emoji: '👜', mode: 'blank', exerciseType: 'missing_word', answer: 'an' },
+    { prompt: 'The children ___ their books.', emoji: '📚', mode: 'blank', exerciseType: 'sentence_completion', answer: 'read' },
+    { prompt: 'Yesterday, I ___ a kite.', emoji: '🪁', mode: 'blank', exerciseType: 'sentence_completion', answer: 'flew' },
+    { prompt: 'They ___ going to the park.', emoji: '🏞️', mode: 'blank', exerciseType: 'sentence_completion', answer: 'are' },
+    { prompt: 'There ___ three apples in the bowl.', emoji: '🍎', mode: 'blank', exerciseType: 'sentence_completion', answer: 'are' },
+    { prompt: 'The small mouse ___ quietly.', emoji: '🐭', mode: 'blank', exerciseType: 'missing_word', answer: 'squeaks' },
+    { prompt: 'A sentence begins with a capital ___.', emoji: '✍️', mode: 'blank', exerciseType: 'missing_word', answer: 'letter' },
+  ],
+  story: [
+    { prompt: 'Pip is a little green ___.', emoji: '🐉', story: 'Pip was a little green dragon. He blew bubbles instead of fire.', mode: 'blank', exerciseType: 'story_cloze', answer: 'dragon' },
+    { prompt: 'Pip blew tiny ___.', emoji: '🫧', story: 'Pip was a little green dragon. He blew bubbles instead of fire.', mode: 'blank', exerciseType: 'story_cloze', answer: 'bubbles' },
+    { prompt: 'The friends felt ___ when Pip helped them.', emoji: '😊', story: 'Pip helped his friends find their way home before dark.', mode: 'blank', exerciseType: 'story_cloze', answer: 'happy' },
+    { prompt: 'The rabbit looked for its ___ near the tree.', emoji: '🐇', story: 'A rabbit lost its red scarf. Pip spotted it beside a tree.', mode: 'blank', exerciseType: 'story_cloze', answer: 'scarf' },
+    { prompt: 'Pip found the scarf beside a ___.', emoji: '🌳', story: 'A rabbit lost its red scarf. Pip spotted it beside a tree.', mode: 'blank', exerciseType: 'story_cloze', answer: 'tree' },
+    { prompt: 'Lena planted a ___.', emoji: '🌱', story: 'Lena planted a tiny seed. She watered it every day. Soon, a green shoot appeared.', mode: 'blank', exerciseType: 'story_cloze', answer: 'seed' },
+    { prompt: 'Lena watered the seed every ___.', emoji: '💧', story: 'Lena planted a tiny seed. She watered it every day. Soon, a green shoot appeared.', mode: 'blank', exerciseType: 'story_cloze', answer: 'day' },
+    { prompt: 'A green ___ appeared.', emoji: '🌿', story: 'Lena planted a tiny seed. She watered it every day. Soon, a green shoot appeared.', mode: 'blank', exerciseType: 'story_cloze', answer: 'shoot' },
+    { prompt: 'Where did Amir fly his kite?', emoji: '🪁', story: 'Amir took his red kite to the park. The wind lifted it high above the trees.', mode: 'blank', exerciseType: 'story_cloze', answer: 'park' },
+    { prompt: 'What lifted the kite?', emoji: '💨', story: 'Amir took his red kite to the park. The wind lifted it high above the trees.', mode: 'blank', exerciseType: 'story_cloze', answer: 'wind' },
+  ],
+  conversation: [
+    { prompt: 'Complete the polite request: “Could I have a glass of ___, please?”', emoji: '💧', mode: 'blank', exerciseType: 'dialogue_completion', answer: 'water' },
+    { prompt: '“How are you?” “I’m ___, thank you.”', emoji: '🙂', mode: 'blank', exerciseType: 'dialogue_completion', answer: 'well' },
+    { prompt: '“Where is the library?” “Go ___ at the next street.”', emoji: '🧭', mode: 'blank', exerciseType: 'dialogue_completion', answer: 'left' },
+    { prompt: '“Would you like some tea?” “Yes, ___.”', emoji: '☕', mode: 'blank', exerciseType: 'dialogue_completion', answer: 'please' },
+    { prompt: '“Thank you for your help!” “You’re ___.”', emoji: '🤝', mode: 'blank', exerciseType: 'dialogue_completion', answer: 'welcome' },
+    { prompt: '“Could you ___ me, please?” “Of course!”', emoji: '🤝', mode: 'blank', exerciseType: 'dialogue_completion', answer: 'help' },
+    { prompt: '“May I borrow your pencil?” “Of ___.”', emoji: '✏️', mode: 'blank', exerciseType: 'dialogue_completion', answer: 'course' },
+    { prompt: '“Would you like to play?” “I’d ___ to!”', emoji: '🎲', mode: 'blank', exerciseType: 'dialogue_completion', answer: 'love' },
+    { prompt: '“I’m sorry I’m late.” “That’s ___.”', emoji: '🙂', mode: 'blank', exerciseType: 'dialogue_completion', answer: 'okay' },
+    { prompt: '“How do I get to the library?” “Turn ___ at the corner.”', emoji: '🧭', mode: 'blank', exerciseType: 'dialogue_completion', answer: 'left' },
+  ],
+}
 
 const practiceQuestionSets: Partial<Record<GameId, { support: Question[]; challenge: Question[] }>> = {
   alphabet: {
@@ -261,11 +331,12 @@ function GameOverlay({ game, soundOn, performance, learnerLevel, onClose, onComp
   performance?: GamePerformance
   learnerLevel: string
   onClose: () => void
-  onComplete: (answers: boolean[]) => Promise<SavedResult>
+  onComplete: (answers: boolean[], exerciseTypes: ExerciseType[]) => Promise<SavedResult>
 }) {
   const [questionIndex, setQuestionIndex] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
   const [built, setBuilt] = useState<string[]>([])
+  const [typedAnswer, setTypedAnswer] = useState('')
   const [revealed, setRevealed] = useState(false)
   const [answerResults, setAnswerResults] = useState<boolean[]>([])
   const [seconds, setSeconds] = useState(25)
@@ -276,12 +347,14 @@ function GameOverlay({ game, soundOn, performance, learnerLevel, onClose, onComp
   const [savedProgress, setSavedProgress] = useState<SavedResult | null>(null)
   const questionBand = performance ? performance.accuracy < 65 ? 'support' : performance.accuracy >= 85 ? 'challenge' : null : null
   const advancedPlacement = !performance && ['word', 'sentence', 'story', 'conversation'].includes(learnerLevel)
+  const writingQuestions = writingQuestionSets[learnerLevel] ?? writingQuestionSets.word
   const personalizedQuestions = questionBand
-    ? practiceQuestionSets[game.id]?.[questionBand] ?? game.questions
+    ? game.id === 'writing' ? writingQuestions : practiceQuestionSets[game.id]?.[questionBand] ?? game.questions
     : advancedPlacement
-      ? practiceQuestionSets[game.id]?.challenge ?? game.questions
-      : game.questions
+      ? game.id === 'writing' ? writingQuestions : practiceQuestionSets[game.id]?.challenge ?? game.questions
+      : game.id === 'writing' ? writingQuestions : game.questions
   const question = personalizedQuestions[questionIndex]
+  const choices = question.choices ?? []
   const isQuiz = game.id === 'quiz'
   const isCorrect = selected === question.answer
   const assembled = built.join(question.mode === 'sentence' ? ' ' : '')
@@ -311,7 +384,7 @@ function GameOverlay({ game, soundOn, performance, learnerLevel, onClose, onComp
       setSaving(true)
       setSaveError('')
       try {
-        const result = await onComplete(answerResults)
+        const result = await onComplete(answerResults, personalizedQuestions.map((item) => item.exerciseType ?? 'game_question'))
         setSavedProgress(result)
         setComplete(true)
       } catch (error) {
@@ -324,6 +397,7 @@ function GameOverlay({ game, soundOn, performance, learnerLevel, onClose, onComp
     setQuestionIndex((index) => index + 1)
     setSelected(null)
     setBuilt([])
+    setTypedAnswer('')
     setRevealed(false)
     setTimerExpired(false)
     setSeconds(25)
@@ -339,6 +413,15 @@ function GameOverlay({ game, soundOn, performance, learnerLevel, onClose, onComp
       if (soundOn) playChime(false)
       setSelected('__wrong__')
     }
+  }
+
+  function checkTypedAnswer() {
+    const normalize = (value: string) => value.trim().toLocaleLowerCase().replace(/[.!?,'"“”]/g, '')
+    if (!typedAnswer.trim() || selected !== null) return
+    const correct = normalize(typedAnswer) === normalize(question.answer)
+    setAnswerResults((results) => [...results, correct])
+    setSelected(correct ? question.answer : '__wrong__')
+    if (soundOn) playChime(correct)
   }
 
   return (
@@ -372,6 +455,7 @@ function GameOverlay({ game, soundOn, performance, learnerLevel, onClose, onComp
                 <div className="mb-3 text-6xl" aria-hidden="true">{question.emoji}</div>
                 {question.story && <p className="mx-auto mb-5 max-w-sm text-left text-[15px] leading-7 text-[#536476]">{question.story}</p>}
                 <p className="text-lg font-extrabold leading-snug text-[#26384c] sm:text-xl">{question.prompt}</p>
+                {game.id === 'writing' && <p className="mt-2 text-xs font-bold text-[#7890a4]">Written practice · no microphone needed</p>}
                 {question.audio && (
                   <button onClick={() => { if (soundOn) speak(question.audio!) }} className="mx-auto mt-4 flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-extrabold text-[#398cb8] shadow-sm transition hover:shadow">
                     <Volume2 size={17} /> Hear it
@@ -379,7 +463,17 @@ function GameOverlay({ game, soundOn, performance, learnerLevel, onClose, onComp
                 )}
               </div>
 
-              {question.mode === 'flash' ? (
+              {question.mode === 'blank' ? (
+                <div className="mx-auto max-w-sm">
+                  <label htmlFor="written-answer" className="mb-2 block text-sm font-extrabold text-[#536476]">Type your answer</label>
+                  <input id="written-answer" autoComplete="off" autoCapitalize="none" value={typedAnswer} disabled={selected !== null} onChange={(event) => setTypedAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') checkTypedAnswer() }} className="min-h-14 w-full rounded-2xl border-2 border-[#dce6eb] bg-white px-4 text-center text-lg font-extrabold text-[#26384c] outline-none focus:border-[#74b5d3] disabled:bg-[#f7f9fa]" placeholder="Your answer" />
+                  {selected !== null && <p role="status" className={`mt-3 text-center text-sm font-extrabold ${isCorrect ? 'text-[#32835e]' : 'text-[#c87853]'}`}>{isCorrect ? 'You got it! ⭐' : `Good try! The answer is ${question.answer}.`}</p>}
+                  <div className="mt-5 flex justify-center">
+                    {selected === null ? <button disabled={!typedAnswer.trim()} onClick={checkTypedAnswer} className="rounded-xl bg-[#26384c] px-6 py-3 font-extrabold text-white disabled:opacity-40">Check answer <Check className="ml-1 inline" size={17} /></button> : <button disabled={saving} onClick={() => void nextQuestion()} className="rounded-xl bg-[#26384c] px-6 py-3 font-extrabold text-white disabled:opacity-50">{saving ? 'Saving…' : saveError ? 'Try saving again' : questionIndex === personalizedQuestions.length - 1 ? 'Finish' : 'Next'} <ArrowRight className="ml-1 inline" size={17} /></button>}
+                  </div>
+                  {saveError && <p role="alert" className="mt-3 text-center text-sm font-bold text-[#bd6555]">{saveError}</p>}
+                </div>
+              ) : question.mode === 'flash' ? (
                 <button disabled={revealed} onClick={() => { setRevealed(true); setSelected(question.answer); setAnswerResults((results) => [...results, true]) }} className="mx-auto flex min-h-20 w-full max-w-sm items-center justify-center rounded-2xl border-2 border-dashed border-[#d7e4ed] bg-[#f8fbfd] p-5 text-xl font-black text-[#398cb8] disabled:cursor-default">
                   {revealed ? question.answer : 'Tap to flip the card ✨'}
                 </button>
@@ -389,8 +483,8 @@ function GameOverlay({ game, soundOn, performance, learnerLevel, onClose, onComp
                     {built.length ? built.map((letter, index) => <span key={`${letter}-${index}`} className="rounded-xl bg-white px-3 py-2 text-lg font-black text-[#34485d] shadow-sm">{letter}</span>) : <span className="text-sm font-bold text-[#a6afb8]">{question.mode === 'spell' ? 'Tap letters to spell the word' : 'Tap words to make a sentence'}</span>}
                   </div>
                   <div className="flex flex-wrap justify-center gap-2">
-                    {question.choices.map((choice, index) => (
-                      <button key={`${choice}-${index}`} disabled={built.filter((item) => item === choice).length >= question.choices.filter((item) => item === choice).length || selected !== null} onClick={() => setBuilt((items) => [...items, choice])} className="min-h-12 rounded-xl border border-[#e7ebee] bg-white px-4 font-extrabold text-[#34485d] shadow-sm transition hover:-translate-y-0.5 hover:border-[#a9c9df] disabled:opacity-35">{choice}</button>
+                    {choices.map((choice, index) => (
+                      <button key={`${choice}-${index}`} disabled={built.filter((item) => item === choice).length >= choices.filter((item) => item === choice).length || selected !== null} onClick={() => setBuilt((items) => [...items, choice])} className="min-h-12 rounded-xl border border-[#e7ebee] bg-white px-4 font-extrabold text-[#34485d] shadow-sm transition hover:-translate-y-0.5 hover:border-[#a9c9df] disabled:opacity-35">{choice}</button>
                     ))}
                   </div>
                   {selected !== null && <p role="status" className={`mt-3 text-center text-sm font-extrabold ${selected === question.answer ? 'text-[#32835e]' : 'text-[#c87853]'}`}>{selected === question.answer ? 'You got it! ⭐' : `Good try! The answer is ${question.answer}.`}</p>}
@@ -402,7 +496,7 @@ function GameOverlay({ game, soundOn, performance, learnerLevel, onClose, onComp
                 </>
               ) : (
                 <div className={`grid ${game.id === 'listening' ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'} gap-2.5`}>
-                  {question.choices.map((choice) => (
+                  {choices.map((choice) => (
                     <motion.button key={choice} whileTap={{ scale: 0.97 }} disabled={selected !== null || (question.mode === 'flash' && !revealed)} onClick={() => submitAnswer(choice)} className={`min-h-14 rounded-2xl border-2 px-4 py-3 font-extrabold transition ${selected === choice ? 'border-[#54b58b] bg-[#eaf8f0] text-[#318961]' : selected === '__wrong__' && choice === question.answer ? 'border-[#54b58b] bg-[#eaf8f0] text-[#318961]' : selected === '__wrong__' ? 'border-[#eceff1] bg-[#f8f9fa] text-[#a0a9b2]' : 'border-[#edf0f2] bg-white text-[#34485d] hover:border-[#b9ccda] hover:bg-[#f7fafb]'}`}>
                       {choice}
                     </motion.button>
@@ -478,12 +572,12 @@ export default function StudentLearnPage() {
     setActiveGame(game)
   }
 
-  async function finishGame(answers: boolean[]): Promise<SavedResult> {
+  async function finishGame(answers: boolean[], exerciseTypes: ExerciseType[]): Promise<SavedResult> {
     if (!activeGame) throw new Error('Choose a game before saving progress.')
     const response = await fetch('/api/student/progress', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gameId: activeGame.id, answers }),
+      body: JSON.stringify({ gameId: activeGame.id, answers, exerciseTypes }),
     })
     const result = await response.json()
     if (!response.ok) throw new Error(result.error ?? 'Could not save your progress. Please try again.')
@@ -624,7 +718,7 @@ export default function StudentLearnPage() {
                 <section>
                   <div className="mb-4 flex items-end justify-between gap-3"><div><p className="mb-1 text-[10px] font-extrabold uppercase tracking-[.18em] text-[#99a49d]">Pick up a new skill</p><h2 className="text-2xl font-black tracking-tight text-[#2d4154]">Quick-play games</h2></div><button onClick={() => chooseTab('games')} className="text-xs font-extrabold text-[#438a68]">See all games <ArrowRight className="ml-1 inline" size={14} /></button></div>
                   {practiceGame && <button onClick={() => openGame(practiceGame)} className="mb-3 flex w-full items-center gap-3 rounded-2xl border border-[#f0e4c6] bg-[#fff9ea] p-4 text-left"><span className="text-2xl">🌱</span><span className="flex-1"><span className="block text-[10px] font-extrabold uppercase tracking-wider text-[#a27b35]">Your personal practice pick</span><span className="mt-1 block text-sm font-black text-[#625238]">{practiceGame.title} · {weakestPractice?.[1].accuracy}% so far — let’s grow together!</span></span><ChevronRight size={18} className="text-[#a27b35]" /></button>}
-                  <GameGrid games={games.slice(0, 4)} onPlay={openGame} />
+                  <GameGrid games={[...games.slice(0, 4), games.find((game) => game.id === 'writing')!]} onPlay={openGame} />
                 </section>
               </motion.div>
             )}

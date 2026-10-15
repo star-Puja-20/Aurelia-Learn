@@ -17,6 +17,7 @@ import { LEVEL_CONFIG, LEVELS_ORDERED } from '@/lib/constants'
 import { AVATAR_EMOJIS, AVATAR_COLORS } from '@/lib/constants'
 import { toast } from 'sonner'
 import type { DBSession, DBStudent, LearningLevel } from '@/lib/types'
+import StudentReport from './student-report'
 
 export default function StudentDetailPage() {
   const params = useParams()
@@ -50,6 +51,7 @@ export default function StudentDetailPage() {
   const [localNotes, setLocalNotes] = useState(notes)
 
   const [aiPlan, setAiPlan] = useState(sessions.find(s => s.ai_plan)?.ai_plan ?? '')
+  const [learningReview, setLearningReview] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [editingPlan, setEditingPlan] = useState(false)
   const [planDraft, setPlanDraft] = useState('')
@@ -88,12 +90,21 @@ export default function StudentDetailPage() {
 
   async function generateAIPlan() {
     if (!student) return
-    if (localNotes.length === 0) {
-      toast.error('Add a teacher observation before generating an AI plan.')
-      return
-    }
     setAiLoading(true)
     try {
+      let currentLearningReview = learningReview
+      if (!currentLearningReview) {
+        const reportResponse = await fetch(`/api/teacher/student-report?studentId=${encodeURIComponent(studentId)}`)
+        const report = await reportResponse.json()
+        if (reportResponse.ok) {
+          currentLearningReview = `${report.recommendation}\nRecent accuracy by exercise: ${(report.exerciseSummary ?? []).map((item: { label: string; accuracy: number; total: number }) => `${item.label} ${item.accuracy}% (${item.total} questions)`).join('; ') || 'No written-exercise results yet.'}`
+          setLearningReview(currentLearningReview)
+        }
+      }
+      if (localNotes.length === 0 && !currentLearningReview.trim()) {
+        toast.error('Add a teacher observation or load the practice review before generating a plan.')
+        return
+      }
       const res = await fetch('/api/ai/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -102,6 +113,7 @@ export default function StudentDetailPage() {
           level: student.current_level,
           notes: localNotes.map(n => n.content),
           sessionHistory: sessions.map(s => `${s.level} session on ${formatDate(s.created_at)}`),
+          learningReview: currentLearningReview,
         }),
       })
       const data = await res.json()
@@ -238,6 +250,7 @@ export default function StudentDetailPage() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="notes">Notes ({localNotes.length})</TabsTrigger>
           <TabsTrigger value="ai-plan">AI Plan</TabsTrigger>
+          <TabsTrigger value="review">Practice review</TabsTrigger>
           <TabsTrigger value="progress">Progress</TabsTrigger>
         </TabsList>
 
@@ -328,7 +341,7 @@ export default function StudentDetailPage() {
                     </>
                   )}
                   {!editingPlan && (
-                    <Button size="sm" onClick={generateAIPlan} disabled={aiLoading || localNotes.length === 0} className="gap-1.5">
+                    <Button size="sm" onClick={generateAIPlan} disabled={aiLoading} className="gap-1.5">
                       {aiLoading ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</> : <><Brain className="h-3.5 w-3.5" /> {aiPlan ? 'Regenerate' : 'Generate plan'}</>}
                     </Button>
                   )}
@@ -345,12 +358,16 @@ export default function StudentDetailPage() {
                 <div className="text-center py-10 text-gray-400">
                   <Brain className="h-10 w-10 mx-auto mb-3 text-gray-200" />
                   <p className="font-display text-lg mb-1">No plan yet</p>
-                  <p className="text-sm">Save a teacher observation first, then generate a plan using it and the session history.</p>
+                  <p className="text-sm">Generate a plan from your observations, recent practice review, and session history.</p>
                 </div>
               )}
             </CardContent>
           </Card>
 
+        </TabsContent>
+
+        <TabsContent value="review">
+          <StudentReport studentId={studentId} onReviewReady={setLearningReview} />
         </TabsContent>
 
         {/* ── Progress ── */}

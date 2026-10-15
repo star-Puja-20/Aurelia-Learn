@@ -14,6 +14,7 @@ import { normalizeUsername, USERNAME_PATTERN } from '@/lib/auth-validation'
 
 const schema = z.object({
   fullName: z.string().min(2, 'Enter your full name'),
+  email: z.string().trim().email('Enter a valid email address'),
   username: z.string().trim().regex(USERNAME_PATTERN, 'Use 3-30 letters, numbers, underscores, or hyphens'),
   password: z.string().min(8, 'At least 8 characters'),
   confirm: z.string(),
@@ -67,7 +68,7 @@ export default function RegisterPage() {
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: normalizeUsername(data.username), password: data.password, fullName: data.fullName, privacyConsent: data.consent }),
+        body: JSON.stringify({ username: normalizeUsername(data.username), email: data.email.trim().toLowerCase(), password: data.password, fullName: data.fullName, privacyConsent: data.consent }),
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error ?? 'Unable to create your account.')
@@ -94,6 +95,7 @@ export default function RegisterPage() {
           <CardContent className="p-5 sm:p-8">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-5">
               <Input label="Full name" error={errors.fullName?.message} {...register('fullName')} />
+              <Input label="Email address" type="email" autoComplete="email" error={errors.email?.message} {...register('email')} />
               <Input label="Username" hint={usernameStatus === 'available' ? 'Username is available.' : usernameStatus === 'taken' ? 'That username is already taken.' : usernameStatus === 'checking' ? 'Checking availability…' : 'Use 3-30 letters, numbers, underscores, or hyphens'} error={errors.username?.message} {...register('username')} />
               <div className="relative">
                 <Input label="Password" type={showPassword ? 'text' : 'password'} error={errors.password?.message} {...register('password')} />

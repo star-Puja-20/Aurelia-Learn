@@ -37,7 +37,9 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 Use Node.js 18 or newer. Run `npm install`, copy `.env.example` to `.env.local`, add the Supabase, Gemini, and Groq values, then run `npm run dev`. The Gemini integration defaults to `gemini-2.0-flash`; set `GEMINI_MODEL` in `.env.local` if your API account exposes a different current model name.
 
-Apply the SQL files in `supabase/migrations/` in chronological order. Existing Supabase projects must also apply `20261006143728_student_game_profiles.sql` to enable persistent per-student progress and `20261006145912_remove_learner_points.sql` to remove the former XP and coin fields.
+Student exercise charts use the Python `pandas` and `matplotlib` libraries. Install them with `python -m pip install -r requirements.txt`. For local development, run `python api/student_chart.py` in a second terminal alongside `npm run dev`; the Next.js development server proxies the chart requests to this local Python service. Vercel serves the same Python handler at `/api/student_chart`.
+
+Apply the SQL files in `supabase/migrations/` in chronological order. Existing Supabase projects must also apply `20261006143728_student_game_profiles.sql` to enable persistent per-student progress, `20261006145912_remove_learner_points.sql` to remove the former XP and coin fields, and `20261013051057_student_exercise_reports.sql` to save detailed student exercise rounds.
 
 Never commit `.env.local` or any file containing real credentials. Teachers sign in at `/auth/login`; administrators use `/auth/admin`. Teachers assign a 6-digit learner PIN when adding a student (or set one from the student list). Students sign in at `/student/login`; their level progress, learning streaks, achievement badges, and per-game accuracy are stored per student in Supabase and are used to choose review or challenge question sets. The learner experience does not use XP or coins.
 

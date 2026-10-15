@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getStudentIdFromCookie } from '@/lib/student-session'
 
-const GAME_IDS = ['alphabet', 'phonics', 'vocabulary', 'spelling', 'sentences', 'stories', 'listening', 'quiz']
+const GAME_IDS = ['alphabet', 'phonics', 'vocabulary', 'spelling', 'sentences', 'stories', 'listening', 'quiz', 'writing']
+const EXERCISE_TYPES = ['missing_letter', 'missing_word', 'sentence_completion', 'story_cloze', 'dialogue_completion', 'game_question']
 const LEVEL_LIMIT = 8 * 3
 
 export async function POST(request: NextRequest) {
@@ -13,8 +14,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const gameId = typeof body.gameId === 'string' ? body.gameId : ''
     const answers: unknown = body.answers
+    const exerciseTypes: unknown = body.exerciseTypes
     if (!GAME_IDS.includes(gameId) || !Array.isArray(answers) || answers.length < 1 || answers.length > 20 ||
-      !answers.every((answer) => typeof answer === 'boolean')) {
+      !answers.every((answer) => typeof answer === 'boolean') || !Array.isArray(exerciseTypes) ||
+      exerciseTypes.length !== answers.length || !exerciseTypes.every((type) => typeof type === 'string' && EXERCISE_TYPES.includes(type))) {
       return NextResponse.json({ error: 'Invalid game result.' }, { status: 400 })
     }
 
@@ -29,8 +32,17 @@ export async function POST(request: NextRequest) {
     if (gameReadError) throw gameReadError
     if (profileReadError) throw profileReadError
 
-    const { error: studentError } = await admin.from('students').select('id').eq('id', studentId).eq('is_active', true).single()
+    const { data: student, error: studentError } = await admin.from('students').select('id, current_level').eq('id', studentId).eq('is_active', true).single()
     if (studentError) return NextResponse.json({ error: 'This learner profile is no longer active.' }, { status: 401 })
+
+    const breakdown = EXERCISE_TYPES.filter((type) => exerciseTypes.includes(type)).map((type) => {
+      const indexes = exerciseTypes.map((value, index) => value === type ? index : -1).filter((index) => index >= 0)
+      return {
+        type,
+        correct: indexes.filter((index) => answerResults[index]).length,
+        total: indexes.length,
+      }
+    })
 
     const now = new Date()
     const today = now.toISOString().slice(0, 10)
@@ -49,6 +61,17 @@ export async function POST(request: NextRequest) {
       last_played_at: now.toISOString(),
     }, { onConflict: 'student_id,game_id' })
     if (gameWriteError) throw gameWriteError
+
+    const { error: attemptError } = await admin.from('student_exercise_attempts').insert({
+      student_id: student.id,
+      game_id: gameId,
+      learning_level: student.current_level,
+      correct_answers: correctNow,
+      total_questions: answerResults.length,
+      exercise_breakdown: breakdown,
+      created_at: now.toISOString(),
+    })
+    if (attemptError) throw attemptError
 
     const lastPlayed = previousProfile?.last_played_on
     const streakDays = lastPlayed === today ? (previousProfile?.streak_days ?? 0)

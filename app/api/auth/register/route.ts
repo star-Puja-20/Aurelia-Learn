@@ -4,11 +4,15 @@ import { normalizeUsername, USERNAME_PATTERN } from '@/lib/auth-validation'
 
 export async function POST(request: NextRequest) {
   try {
-    const { username, password, fullName, privacyConsent } = await request.json()
+    const { username, email, password, fullName, privacyConsent } = await request.json()
     const normalizedUsername = typeof username === 'string' ? normalizeUsername(username) : ''
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
 
     if (!USERNAME_PATTERN.test(normalizedUsername)) {
       return NextResponse.json({ error: 'Username must be 3-30 characters using letters, numbers, underscores, or hyphens.' }, { status: 400 })
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 })
     }
     if (typeof password !== 'string' || password.length < 8) {
       return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 })
@@ -31,6 +35,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'That username is already taken.' }, { status: 409 })
     }
 
+    const { data: existingEmail, error: emailLookupError } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('email', normalizedEmail)
+      .maybeSingle()
+    if (emailLookupError) throw emailLookupError
+    if (existingEmail) return NextResponse.json({ error: 'That email address is already in use.' }, { status: 409 })
+
     const internalEmail = `${normalizedUsername}@accounts.aurelialearn.internal`
     const { data: signupData, error: signupError } = await supabase.auth.admin.createUser({
       email: internalEmail,
@@ -52,6 +64,7 @@ export async function POST(request: NextRequest) {
 
     const { error: profileError } = await supabase.from('profiles').insert({
       id: signupData.user.id,
+      email: normalizedEmail,
       username: normalizedUsername,
       full_name: fullName.trim(),
       role: 'teacher',

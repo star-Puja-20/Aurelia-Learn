@@ -13,6 +13,7 @@ const PRACTICE_SUGGESTIONS: Record<string, string> = {
   stories: 'Read a short story together and ask one recall question.',
   listening: 'Try a short listen-and-identify picture game.',
   quiz: 'Review a mixed-skill round at a comfortable pace.',
+  writing: 'Try a voice-free Word Workshop round at the learner’s current level.',
 }
 
 export async function GET() {

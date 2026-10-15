@@ -12,26 +12,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }
 
-    const { studentName, level, notes, sessionHistory } = await req.json()
+    const { studentName, level, notes, sessionHistory, learningReview = '' } = await req.json()
 
     if (typeof studentName !== 'string' || studentName.length > 100 || typeof level !== 'string' ||
-      !Array.isArray(notes) || notes.length > 20 || !Array.isArray(sessionHistory) || sessionHistory.length > 50) {
+      !Array.isArray(notes) || notes.length > 20 || !Array.isArray(sessionHistory) || sessionHistory.length > 50 ||
+      typeof learningReview !== 'string' || learningReview.length > 3000) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
     }
 
-    if (!Array.isArray(notes) || notes.length === 0 || notes.every(note => !String(note).trim())) {
-      return NextResponse.json({ error: 'A teacher observation is required before generating a plan.' }, { status: 400 })
+    if (notes.every(note => !String(note).trim()) && !learningReview.trim()) {
+      return NextResponse.json({ error: 'Add a teacher observation or generate a learning review before planning.' }, { status: 400 })
     }
 
     if (!process.env.GEMINI_API_KEY) {
       // Return mock plan if no API key configured
       return NextResponse.json({
-        plan: generateMockPlan(studentName, level),
+        plan: generateMockPlan(studentName, level, learningReview),
         source: 'mock',
       })
     }
 
-    const prompt = buildPrompt(studentName, level, notes, sessionHistory)
+    const prompt = buildPrompt(studentName, level, notes, sessionHistory, learningReview)
 
     const model = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash'
     const res = await fetch(
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function buildPrompt(name: string, level: string, notes: string[], history: string[]) {
+function buildPrompt(name: string, level: string, notes: string[], history: string[], learningReview: string) {
   return `You are an expert English teacher assistant for a children's learning platform called Aurelia Learn.
 
 Generate a structured lesson plan for a student named ${name} who is at the "${level}" level of English learning.
@@ -66,12 +67,15 @@ Generate a structured lesson plan for a student named ${name} who is at the "${l
 The five levels are: Letter → Word → Sentence → Story → Conversation.
 
 Teacher observations provided by the teacher:
-${notes.join('\n')}
+${notes.length ? notes.join('\n') : 'No teacher observations have been added yet.'}
 
 Previous session topics:
 ${history.length ? history.join('\n') : 'This is the first session.'}
 
-Generate a clear, engaging lesson plan with:
+Recent exercise review from the application (use as one indicator and leave the final teaching decision to the teacher):
+${learningReview || 'No recent exercise review is available.'}
+
+Use the exercise review to select a short practice activity for a skill that needs attention, if the report provides enough evidence. Generate a clear, engaging lesson plan with:
 1. Warm-up activity (5 min)
 2. Main learning activity (20 min)
 3. Practice exercise (10 min)
@@ -80,7 +84,7 @@ Generate a clear, engaging lesson plan with:
 Keep it child-friendly, specific to the ${level} level, and avoid repeating anything from previous sessions. Use emojis to make it engaging. Format in markdown.`
 }
 
-function generateMockPlan(name: string, level: string) {
+function generateMockPlan(name: string, level: string, learningReview = '') {
   const activities: Record<string, string> = {
     letter: `## 📝 Session Plan for ${name} — Letter Level\n\n**Warm-up (5 min)**\nSing the ABC song together and point to each letter on the alphabet chart. Focus on letters the student has recently learned.\n\n**Main Activity (20 min)**\n🔤 Introduce 3 new letters with their sounds and an emoji helper:\n- Letter P → /p/ → 🐧 Penguin\n- Letter Q → /kw/ → 👸 Queen  \n- Letter R → /r/ → 🌈 Rainbow\n\nTrace each letter, say the sound, name the emoji.\n\n**Practice (10 min)**\n✏️ Worksheet: Match the letter to its picture. Write each letter 3 times.\n\n**Wrap-up (5 min)**\n⭐ Review today's 3 letters. Give a star sticker for each one remembered correctly.`,
     word: `## 📚 Session Plan for ${name} — Word Level\n\n**Warm-up (5 min)**\nFlashcard review of 5 sight words from the last session. Quick-fire round!\n\n**Main Activity (20 min)**\n📖 Introduce 5 new sight words:\n- *they* · *said* · *have* · *like* · *some*\n\nFor each word: show card → read aloud → use in a simple sentence → ${name} repeats.\n\n**Practice (10 min)**\n🎯 Word matching game — match word cards to picture cards. Then write each new word once.\n\n**Wrap-up (5 min)**\n⭐ "Word of the day" — ${name} picks their favourite new word and draws a picture for it.`,
@@ -88,5 +92,6 @@ function generateMockPlan(name: string, level: string) {
     story: `## 📖 Session Plan for ${name} — Story Level\n\n**Warm-up (5 min)**\nQuick recap of last story. Ask: "Who was the main character? What happened at the end?"\n\n**Main Activity (20 min)**\n📚 Read "The Friendly Dragon" together:\n- Page by page, ${name} reads aloud\n- Pause at key moments: "What do you think will happen next?"\n\n**Practice (10 min)**\n❓ Comprehension questions:\n1. What colour is Pip?\n2. What did Pip breathe instead of fire?\n3. Why did the animals need Pip's help?\n\n**Wrap-up (5 min)**\n⭐ ${name} draws their favourite scene from the story.`,
     conversation: `## 🗣️ Session Plan for ${name} — Conversation Level\n\n**Warm-up (5 min)**\nFree chat in English for 5 minutes — how was your week? Any favourite topic.\n\n**Main Activity (20 min)**\n💬 Dialogue practice: "At the shops"\n\nRole-play a shopping scenario. ${name} plays the customer:\n- Asking for items\n- Asking for the price\n- Saying thank you and goodbye\n\nSwitch roles halfway.\n\n**Practice (10 min)**\n🎙️ Describe a picture scene using at least 5 sentences. Focus on connectors: *first, then, after that, finally*.\n\n**Wrap-up (5 min)**\n⭐ ${name} records a 30-second voice message in English about their favourite thing.`,
   }
-  return activities[level] ?? activities['word']
+  const plan = activities[level] ?? activities['word']
+  return learningReview ? `${plan}\n\n## Recent practice review\n\n${learningReview}\n\nUse this as a guide and confirm the focus with the student.` : plan
 }

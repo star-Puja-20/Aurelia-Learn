@@ -9,7 +9,6 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { createClient } from '@/lib/supabase/client'
 import { USERNAME_PATTERN } from '@/lib/auth-validation'
 
 const loginSchema = z.object({
@@ -28,12 +27,6 @@ export default function LoginPage({ requiredRole = 'teacher' }: { requiredRole?:
     resolver: zodResolver(loginSchema),
   })
   async function onSubmit(data: LoginForm) {
-    const username = data.identifier
-    if (username !== username.toLowerCase()) {
-      toast.error('Usernames are case-sensitive. Check the uppercase and lowercase letters.')
-      return
-    }
-
     setIsLoading(true)
     try {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -43,25 +36,13 @@ export default function LoginPage({ requiredRole = 'teacher' }: { requiredRole?:
         return
       }
 
-      const supabase = createClient()
-      const { data: signInData, error } = await supabase.auth.signInWithPassword({
-        email: `${username}@accounts.aurelialearn.internal`,
-        password: data.password,
+      const response = await fetch('/api/auth/sign-in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: data.identifier, password: data.password, requiredRole }),
       })
-
-      if (error) throw error
-
-      const { data: profile, error: roleError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', signInData.user.id)
-        .single()
-      if (roleError) throw roleError
-      if (profile.role !== requiredRole) {
-        await supabase.auth.signOut()
-        toast.error(requiredRole === 'teacher' ? 'This account is not a teacher account.' : 'This account is not an administrator account.')
-        return
-      }
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error ?? 'Unable to sign in.')
 
       toast.success('Welcome back!')
       router.push(requiredRole === 'administrator' ? '/admin/dashboard' : '/teacher/dashboard')
@@ -116,6 +97,7 @@ export default function LoginPage({ requiredRole = 'teacher' }: { requiredRole?:
             <Input
               label="Username"
               type="text"
+              autoComplete="username"
               error={errors.identifier?.message}
               {...register('identifier')}
             />
