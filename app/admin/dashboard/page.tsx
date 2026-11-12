@@ -1,26 +1,47 @@
 export const dynamic = 'force-dynamic'
-import { MOCK_STUDENTS, MOCK_SESSIONS } from '@/lib/mock-data'
+import { createClient } from '@/lib/supabase/server'
 import { LEVEL_CONFIG, LEVELS_ORDERED } from '@/lib/constants'
 import { formatDate } from '@/lib/utils'
 import { LevelBadge } from '@/components/ui/badge'
 import { StudentAvatar } from '@/components/ui/avatar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Users, BookOpen, TrendingUp, School } from 'lucide-react'
+import type { LearningLevel, SessionStatus } from '@/lib/types'
 
-export default function AdminDashboard() {
-  const totalStudents = MOCK_STUDENTS.length
-  const activeStudents = MOCK_STUDENTS.filter(s => s.is_active).length
-  const totalSessions = MOCK_SESSIONS.length
-  const completedSessions = MOCK_SESSIONS.filter(s => s.status === 'completed').length
+interface RecentSession {
+  id: string
+  level: LearningLevel
+  status: SessionStatus
+  created_at: string
+  students: { full_name: string; avatar_emoji: string; avatar_color: string } | null
+}
+
+export default async function AdminDashboard() {
+  // The administrator read policies in the database allow these platform-wide counts.
+  const supabase = await createClient()
+  const [studentRows, totalSessionsResult, completedSessionsResult, recentResult] = await Promise.all([
+    supabase.from('students').select('current_level, is_active').limit(10000),
+    supabase.from('sessions').select('id', { count: 'exact', head: true }),
+    supabase.from('sessions').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
+    supabase
+      .from('sessions')
+      .select('id, level, status, created_at, students(full_name, avatar_emoji, avatar_color)')
+      .order('created_at', { ascending: false })
+      .limit(6),
+  ])
+
+  const students = studentRows.data ?? []
+  const totalStudents = students.length
+  const activeStudents = students.filter(s => s.is_active).length
+  const totalSessions = totalSessionsResult.count ?? 0
+  const completedSessions = completedSessionsResult.count ?? 0
+  const recentSessions = (recentResult.data ?? []) as unknown as RecentSession[]
+  const loadFailed = !!(studentRows.error || recentResult.error)
 
   const byLevel = LEVELS_ORDERED.map(l => ({
     ...LEVEL_CONFIG[l],
-    count: MOCK_STUDENTS.filter(s => s.current_level === l).length,
+    count: students.filter(s => s.current_level === l).length,
   }))
-
-  const recentSessions = [...MOCK_SESSIONS]
-    .sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 6)
 
   const stats = [
     { label: 'Total Students', value: totalStudents, icon: Users, color: '#4FC3F7', bg: '#E1F5FE' },
@@ -36,7 +57,10 @@ export default function AdminDashboard() {
         <p className="text-gray-500 text-sm mt-1">Platform-wide overview — read-only access</p>
       </div>
 
-      {/* Stats */}
+      {loadFailed && (
+        <p role="alert" className="mb-6 rounded-xl bg-coral-50 px-4 py-3 text-sm text-coral-600">Some figures could not be loaded. Please refresh.</p>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {stats.map(s => {
           const Icon = s.icon
@@ -55,7 +79,6 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Level distribution */}
         <Card>
           <CardHeader><CardTitle>Students by Level</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -79,29 +102,32 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Recent sessions */}
         <Card>
           <CardHeader><CardTitle>Recent Sessions</CardTitle></CardHeader>
           <CardContent className="p-0">
-            {recentSessions.map(session => {
-              const student = MOCK_STUDENTS.find(s => s.id === session.student_id)
-              if (!student) return null
-              return (
-                <div key={session.id} className="flex items-center gap-3 px-6 py-3 border-b border-gray-50 last:border-0">
-                  <StudentAvatar emoji={student.avatar_emoji} color={student.avatar_color} name={student.full_name} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-navy-800 truncate">{student.full_name}</p>
-                    <p className="text-xs text-gray-400">{formatDate(session.created_at, 'relative')}</p>
-                  </div>
-                  <LevelBadge level={session.level} />
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${
-                    session.status === 'completed' ? 'bg-mint-100 text-mint-600' :
-                    session.status === 'planned' ? 'bg-sky-100 text-sky-600' :
-                    'bg-gray-100 text-gray-500'
-                  }`}>{session.status}</span>
+            {recentSessions.length === 0 && (
+              <p className="px-6 py-8 text-center text-sm text-gray-400">No sessions yet</p>
+            )}
+            {recentSessions.map(session => (
+              <div key={session.id} className="flex items-center gap-3 px-6 py-3 border-b border-gray-50 last:border-0">
+                <StudentAvatar
+                  emoji={session.students?.avatar_emoji ?? '⭐'}
+                  color={session.students?.avatar_color ?? '#4FC3F7'}
+                  name={session.students?.full_name ?? 'Student'}
+                  size="sm"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-navy-800 truncate">{session.students?.full_name ?? 'Student'}</p>
+                  <p className="text-xs text-gray-400">{formatDate(session.created_at, 'relative')}</p>
                 </div>
-              )
-            })}
+                <LevelBadge level={session.level} />
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${
+                  session.status === 'completed' ? 'bg-mint-100 text-mint-600' :
+                  session.status === 'planned' ? 'bg-sky-100 text-sky-600' :
+                  'bg-gray-100 text-gray-500'
+                }`}>{session.status}</span>
+              </div>
+            ))}
           </CardContent>
         </Card>
       </div>

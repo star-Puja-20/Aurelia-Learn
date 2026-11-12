@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAuthenticatedTeacherWorkspace } from '@/lib/server-auth'
-import { hashPin } from '@/lib/pin-security'
+import { AVATAR_COLORS, AVATAR_EMOJIS } from '@/lib/constants'
+import { isLevel, isUuid } from '@/lib/input-validation'
+import { allowRequest } from '@/lib/rate-limit'
+
+const MAX_STUDENTS_PER_TEACHER = 200
 
 const STUDENT_COLUMNS = 'id, teacher_id, full_name, current_level, avatar_emoji, avatar_color, is_active, created_at, updated_at'
 
@@ -14,14 +18,12 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from('students')
-      .select(`${STUDENT_COLUMNS}, pin_hash`)
+      .select(STUDENT_COLUMNS)
       .eq('teacher_id', user.id)
       .order('created_at', { ascending: false })
 
     if (error) throw error
-    return NextResponse.json({
-      students: (data ?? []).map(({ pin_hash, ...student }) => ({ ...student, has_pin: Boolean(pin_hash) })),
-    })
+    return NextResponse.json({ students: data ?? [] })
   } catch (error) {
     console.error('[Students GET]', error)
     return NextResponse.json({ error: 'Unable to load students' }, { status: 500 })
@@ -32,14 +34,25 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getAuthenticatedTeacherWorkspace()
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    if (!allowRequest(`students-write:${user.id}`, 30, 60_000)) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    }
 
     const body = await request.json()
-    const { fullName, level, avatarEmoji, avatarColor, pin } = body
-    if (typeof fullName !== 'string' || fullName.length < 2 || fullName.length > 100 ||
-      !['letter', 'word', 'sentence', 'story', 'conversation'].includes(level) ||
-      typeof avatarEmoji !== 'string' || typeof avatarColor !== 'string' ||
-      typeof pin !== 'string' || !/^\d{6}$/.test(pin)) {
+    const { fullName, level, avatarEmoji, avatarColor } = body
+    if (typeof fullName !== 'string' || fullName.trim().length < 2 || fullName.length > 100 ||
+      !isLevel(level) ||
+      !AVATAR_EMOJIS.includes(avatarEmoji) || !AVATAR_COLORS.includes(avatarColor)) {
       return NextResponse.json({ error: 'Missing student details' }, { status: 400 })
+    }
+
+    const supabaseForCount = await createServerClient()
+    const { count: studentCount } = await supabaseForCount
+      .from('students')
+      .select('id', { count: 'exact', head: true })
+      .eq('teacher_id', user.id)
+    if ((studentCount ?? 0) >= MAX_STUDENTS_PER_TEACHER) {
+      return NextResponse.json({ error: 'Student limit reached' }, { status: 400 })
     }
 
     const admin = createAdminClient()
@@ -51,7 +64,7 @@ export async function POST(request: NextRequest) {
         full_name: fullName.trim(),
         current_level: level,
         pin: null,
-        pin_hash: hashPin(pin),
+        pin_hash: null,
         avatar_emoji: avatarEmoji,
         avatar_color: avatarColor,
       })
@@ -60,12 +73,12 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('[Students POST insert]', error)
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json({ error: 'Unable to add student' }, { status: 400 })
     }
     return NextResponse.json({ student }, { status: 201 })
   } catch (error) {
     console.error('[Students POST]', error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to add student' }, { status: 500 })
+    return NextResponse.json({ error: 'Unable to add student' }, { status: 500 })
   }
 }
 
@@ -73,16 +86,18 @@ export async function PATCH(request: NextRequest) {
   try {
     const user = await getAuthenticatedTeacherWorkspace()
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    if (!allowRequest(`students-write:${user.id}`, 30, 60_000)) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    }
 
     const body = await request.json()
-    const { studentId, fullName, level, avatarEmoji, avatarColor, isActive, pin } = body
-    if (typeof studentId !== 'string' ||
+    const { studentId, fullName, level, avatarEmoji, avatarColor, isActive } = body
+    if (!isUuid(studentId) ||
       (fullName !== undefined && (typeof fullName !== 'string' || fullName.trim().length < 2 || fullName.length > 100)) ||
-      (level !== undefined && !['letter', 'word', 'sentence', 'story', 'conversation'].includes(level)) ||
-      (avatarEmoji !== undefined && typeof avatarEmoji !== 'string') ||
-      (avatarColor !== undefined && typeof avatarColor !== 'string') ||
-      (isActive !== undefined && typeof isActive !== 'boolean') ||
-      (pin !== undefined && (typeof pin !== 'string' || !/^\d{6}$/.test(pin)))) {
+      (level !== undefined && !isLevel(level)) ||
+      (avatarEmoji !== undefined && !AVATAR_EMOJIS.includes(avatarEmoji)) ||
+      (avatarColor !== undefined && !AVATAR_COLORS.includes(avatarColor)) ||
+      (isActive !== undefined && typeof isActive !== 'boolean')) {
       return NextResponse.json({ error: 'Invalid student details' }, { status: 400 })
     }
 
@@ -92,7 +107,6 @@ export async function PATCH(request: NextRequest) {
     if (avatarEmoji !== undefined) updates.avatar_emoji = avatarEmoji
     if (avatarColor !== undefined) updates.avatar_color = avatarColor
     if (isActive !== undefined) updates.is_active = isActive
-    if (pin !== undefined) updates.pin_hash = hashPin(pin)
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'No changes provided' }, { status: 400 })
@@ -112,6 +126,6 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ student })
   } catch (error) {
     console.error('[Students PATCH]', error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to update student' }, { status: 500 })
+    return NextResponse.json({ error: 'Unable to update student' }, { status: 500 })
   }
 }

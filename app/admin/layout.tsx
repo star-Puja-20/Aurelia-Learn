@@ -1,8 +1,13 @@
 import { redirect } from 'next/navigation'
-import { cookies } from 'next/headers'
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { LayoutDashboard, Users, Settings, FileText, BarChart3, Star, LogOut, BookOpen } from 'lucide-react'
 import { getAuthenticatedAdmin } from '@/lib/server-auth'
+
+export const metadata: Metadata = {
+  title: { template: '%s | Aurelia Learn Admin', default: 'Admin' },
+  robots: { index: false, follow: false },
+}
 
 const NAV = [
   { label: 'Dashboard',  href: '/admin/dashboard', icon: LayoutDashboard },
@@ -14,12 +19,8 @@ const NAV = [
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const cookieStore = await cookies()
   const admin = await getAuthenticatedAdmin()
-  const demoAdmin = process.env.NODE_ENV !== 'production' &&
-    cookieStore.get('demo_session')?.value === 'admin_demo' &&
-    cookieStore.get('demo_role')?.value === 'administrator'
-  if (!admin && !demoAdmin) {
+  if (!admin) {
     redirect('/auth/login')
   }
 
@@ -44,7 +45,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           })}
         </nav>
         <div className="px-3 py-4 border-t border-white/10">
-          <form action="/auth/signout">
+          <form action="/auth/signout" method="post">
             <button className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-white/60 hover:text-white w-full text-sm font-semibold transition-colors">
               <LogOut className="h-4 w-4" /> Sign out
             </button>

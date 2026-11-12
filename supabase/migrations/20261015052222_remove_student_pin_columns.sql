@@ -1,0 +1,3 @@
+ALTER TABLE public.students
+  DROP COLUMN IF EXISTS pin,
+  DROP COLUMN IF EXISTS pin_hash;

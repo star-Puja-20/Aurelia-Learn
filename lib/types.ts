@@ -26,7 +26,6 @@ export interface DBStudent {
   id: string
   teacher_id: string
   full_name: string
-  pin: string               // 4-digit, stored hashed in prod
   current_level: LearningLevel
   avatar_emoji: string
   avatar_color: string      // hex colour for avatar background
@@ -53,6 +52,20 @@ export interface DBStudentProgress {
   attempts: number
   last_attempted_at: string | null
   completed_at: string | null
+  created_at: string
+}
+
+export interface DBExerciseResult {
+  id: string
+  teacher_id: string
+  student_id: string
+  session_id: string | null
+  level: LearningLevel
+  skill: 'learn' | 'reading' | 'listening' | 'written'
+  exercise_id: string
+  score: number              // 0-100
+  correct: number
+  total: number
   created_at: string
 }
 

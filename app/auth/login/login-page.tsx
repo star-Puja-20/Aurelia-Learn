@@ -9,6 +9,8 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { createClient } from '@/lib/supabase/client'
+import { getSupabasePublicConfig } from '@/lib/supabase/env'
 import { USERNAME_PATTERN } from '@/lib/auth-validation'
 
 const loginSchema = z.object({
@@ -16,9 +18,9 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Enter your password'),
 })
 type LoginForm = z.infer<typeof loginSchema>
-type LoginRole = 'teacher' | 'administrator'
+type LoginPageProps = { requiredRole?: 'teacher' | 'administrator' }
 
-export default function LoginPage({ requiredRole = 'teacher' }: { requiredRole?: LoginRole }) {
+export default function LoginPage({ requiredRole }: LoginPageProps = {}) {
   const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -27,25 +29,40 @@ export default function LoginPage({ requiredRole = 'teacher' }: { requiredRole?:
     resolver: zodResolver(loginSchema),
   })
   async function onSubmit(data: LoginForm) {
+    const username = data.identifier
+    if (username !== username.toLowerCase()) {
+      toast.error('Usernames are case-sensitive. Check the uppercase and lowercase letters.')
+      return
+    }
+
     setIsLoading(true)
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      if (!supabaseUrl || supabaseUrl.startsWith('your_') || !supabaseKey || supabaseKey.startsWith('your_')) {
+      if (!getSupabasePublicConfig().configured) {
         toast.error('Configure Supabase to sign in.')
         return
       }
 
-      const response = await fetch('/api/auth/sign-in', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: data.identifier, password: data.password, requiredRole }),
+      const supabase = createClient()
+      const { data: signInData, error } = await supabase.auth.signInWithPassword({
+        email: `${username}@accounts.aurelialearn.internal`,
+        password: data.password,
       })
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error ?? 'Unable to sign in.')
+
+      if (error) throw error
+
+      const { data: profile, error: roleError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', signInData.user.id)
+        .single()
+      if (roleError) throw roleError
+      if (requiredRole && profile.role !== requiredRole) {
+        await supabase.auth.signOut()
+        throw new Error(`This sign-in page is for ${requiredRole === 'administrator' ? 'administrators' : 'teachers'} only.`)
+      }
 
       toast.success('Welcome back!')
-      router.push(requiredRole === 'administrator' ? '/admin/dashboard' : '/teacher/dashboard')
+      router.push(profile.role === 'administrator' ? '/admin/dashboard' : '/teacher/dashboard')
       router.refresh()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to sign in.')
@@ -86,7 +103,7 @@ export default function LoginPage({ requiredRole = 'teacher' }: { requiredRole?:
             <Star className="h-8 w-8 text-white fill-white" />
           </motion.div>
           <h1 className="font-display text-3xl text-navy-800">Aurelia Learn</h1>
-          <p className="text-gray-500 text-sm mt-1">{requiredRole === 'administrator' ? 'Administrator Portal' : 'Teacher Portal'}</p>
+          <p className="text-gray-500 text-sm mt-1">Teacher & Administrator Portal</p>
         </div>
 
         {/* Login form */}
@@ -97,7 +114,6 @@ export default function LoginPage({ requiredRole = 'teacher' }: { requiredRole?:
             <Input
               label="Username"
               type="text"
-              autoComplete="username"
               error={errors.identifier?.message}
               {...register('identifier')}
             />
@@ -141,14 +157,13 @@ export default function LoginPage({ requiredRole = 'teacher' }: { requiredRole?:
           </form>
 
           <p className="text-center text-sm text-gray-500 mt-5">
-            {requiredRole === 'teacher' ? <>New to Aurelia Learn?{' '}
-              <a href="/auth/register" className="text-sky-500 font-semibold hover:underline">Create a teacher account</a></> :
-              <>Need a teacher account? <a href="/auth/login" className="text-sky-500 font-semibold hover:underline">Teacher sign in</a></>}
+            New to Aurelia Learn?{' '}
+            <a href="/auth/register" className="text-sky-500 font-semibold hover:underline">Create an account</a>
           </p>
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-4">
-          {requiredRole === 'teacher' && <>Are you an administrator? <a href="/auth/admin" className="font-semibold text-sky-500 hover:underline">Administrator sign in</a></>}
+          Student sessions open directly from their assigned learning links.
         </p>
       </motion.div>
     </div>

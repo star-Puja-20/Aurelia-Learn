@@ -12,6 +12,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }
 
+    const declaredSize = Number(req.headers.get('content-length') ?? 0)
+    if (declaredSize > 11 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Audio must be smaller than 10 MB' }, { status: 413 })
+    }
+
     const formData = await req.formData()
     const audio = formData.get('audio') as File | null
 
@@ -47,6 +52,7 @@ export async function POST(req: NextRequest) {
     const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
+      signal: AbortSignal.timeout(30_000),
       body: groqForm,
     })
 

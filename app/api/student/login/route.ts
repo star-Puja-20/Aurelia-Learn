@@ -1,28 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { hashPin, verifyPin } from '@/lib/pin-security'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getAuthenticatedTeacher } from '@/lib/server-auth'
 import { createStudentSessionToken, STUDENT_SESSION_COOKIE, STUDENT_SESSION_MAX_AGE } from '@/lib/student-session'
 
 export async function POST(request: NextRequest) {
   try {
+    const teacher = await getAuthenticatedTeacher()
+    if (!teacher) return NextResponse.json({ error: 'A teacher must sign in before choosing a learner.' }, { status: 401 })
+
     const body = await request.json()
-    const fullName = typeof body.fullName === 'string' ? body.fullName.trim() : ''
-    const pin = typeof body.pin === 'string' ? body.pin : ''
-    if (fullName.length < 2 || fullName.length > 100 || !/^\d{4,6}$/.test(pin)) {
-      return NextResponse.json({ error: 'Enter your name and 4–6 digit learner PIN.' }, { status: 400 })
+    const studentId = typeof body.studentId === 'string' ? body.studentId : ''
+    if (!studentId) {
+      return NextResponse.json({ error: 'Choose a learner from your class.' }, { status: 400 })
     }
 
-    const admin = createAdminClient()
-    const { data: students, error } = await admin
+    const supabase = await createServerClient()
+    const { data: student, error } = await supabase
       .from('students')
-      .select('id, pin_hash')
-      .eq('full_name', fullName)
+      .select('id')
+      .eq('id', studentId)
+      .eq('teacher_id', teacher.id)
       .eq('is_active', true)
-      .limit(20)
+      .maybeSingle()
 
     if (error) throw error
-    const student = students?.find((candidate) => candidate.pin_hash && verifyPin(pin, candidate.pin_hash))
-    if (!student) return NextResponse.json({ error: 'That name and PIN did not match. Ask your teacher for help.' }, { status: 401 })
+    if (!student) return NextResponse.json({ error: 'That learner is not available in your class.' }, { status: 404 })
 
     const expiresAt = Math.floor(Date.now() / 1000) + STUDENT_SESSION_MAX_AGE
     const token = createStudentSessionToken(student.id, expiresAt)

@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Edit3, Plus, Star, Brain, Save, Loader2, TrendingUp, Check } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -11,47 +11,53 @@ import { StudentAvatar } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { MOCK_STUDENTS, MOCK_SESSIONS, MOCK_NOTES, MOCK_PROGRESS } from '@/lib/mock-data'
+import { averageScore, levelProgress } from '@/lib/progress'
+import { LEARN_TITLES, setById } from '@/lib/exercises'
 import { formatDate, progressColor } from '@/lib/utils'
 import { LEVEL_CONFIG, LEVELS_ORDERED } from '@/lib/constants'
 import { AVATAR_EMOJIS, AVATAR_COLORS } from '@/lib/constants'
 import { toast } from 'sonner'
-import type { DBSession, DBStudent, LearningLevel } from '@/lib/types'
-import StudentReport from './student-report'
+import type { DBExerciseResult, DBSession, DBStudent, DBTeacherNote, LearningLevel } from '@/lib/types'
 
 export default function StudentDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const studentId = params.id as string
 
-  const mockStudent = MOCK_STUDENTS.find(s => s.id === studentId)
   const [savedStudent, setSavedStudent] = useState<DBStudent | undefined>(undefined)
-  const [savedSessions, setSavedSessions] = useState<DBSession[]>([])
+  const [studentLoaded, setStudentLoaded] = useState(false)
+  const [sessions, setSessions] = useState<DBSession[]>([])
+  const [results, setResults] = useState<DBExerciseResult[]>([])
+  const [localNotes, setLocalNotes] = useState<DBTeacherNote[]>([])
+  const [planSessionId, setPlanSessionId] = useState<string | null>(null)
+
   useEffect(() => {
-    if (!mockStudent) {
-      fetch('/api/students')
-        .then(response => response.ok ? response.json() : { students: [] })
-        .then(result => setSavedStudent(result.students?.find((item: DBStudent) => item.id === studentId)))
-        .catch(() => setSavedStudent(undefined))
-    }
-  }, [mockStudent, studentId])
-  useEffect(() => {
-    fetch(`/api/sessions?studentId=${studentId}`)
-      .then(response => response.ok ? response.json() : { sessions: [] })
-      .then(result => setSavedSessions(result.sessions ?? []))
-      .catch(() => setSavedSessions([]))
+    const read = (url: string, key: string) =>
+      fetch(url).then(response => (response.ok ? response.json() : {}) as Promise<Record<string, never[]>>).then(result => result[key] ?? []).catch(() => [])
+    fetch('/api/students')
+      .then(response => response.ok ? response.json() : { students: [] })
+      .then(result => setSavedStudent(result.students?.find((item: DBStudent) => item.id === studentId)))
+      .catch(() => setSavedStudent(undefined))
+      .finally(() => setStudentLoaded(true))
+    read(`/api/sessions?studentId=${studentId}`, 'sessions').then((rows: DBSession[]) => {
+      setSessions(rows)
+      const withPlan = rows.find(row => row.teacher_edits || row.ai_plan)
+      if (withPlan) {
+        setPlanSessionId(withPlan.id)
+        setAiPlan(withPlan.teacher_edits ?? withPlan.ai_plan ?? '')
+      }
+    })
+    read(`/api/notes?studentId=${studentId}`, 'notes').then(setLocalNotes)
+    read(`/api/exercise-results?studentId=${studentId}`, 'results').then(setResults)
   }, [studentId])
-  const student = mockStudent ?? savedStudent
-  const sessions = savedSessions
-  const notes = MOCK_NOTES.filter(n => n.student_id === studentId)
-  const progress = MOCK_PROGRESS.filter(p => p.student_id === studentId)
+  const student = savedStudent
 
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
   const [noteText, setNoteText] = useState('')
-  const [localNotes, setLocalNotes] = useState(notes)
+  const [savingNote, setSavingNote] = useState(false)
 
-  const [aiPlan, setAiPlan] = useState(sessions.find(s => s.ai_plan)?.ai_plan ?? '')
-  const [learningReview, setLearningReview] = useState('')
+  const [aiPlan, setAiPlan] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [editingPlan, setEditingPlan] = useState(false)
   const [planDraft, setPlanDraft] = useState('')
@@ -70,6 +76,10 @@ export default function StudentDetailPage() {
   const [editActive, setEditActive] = useState(true)
   const [savingStudent, setSavingStudent] = useState(false)
 
+  if (!studentLoaded) {
+    return <div className="p-8 text-center text-gray-400">Loading…</div>
+  }
+
   if (!student) {
     return (
       <div className="p-8 text-center">
@@ -80,31 +90,17 @@ export default function StudentDetailPage() {
   }
 
   const completedSessions = sessions.filter(s => s.status === 'completed')
-  const completedProgress = progress.filter(p => p.status === 'completed')
-  const avgScore = completedProgress.length > 0
-    ? Math.round(completedProgress.reduce((sum, p) => sum + (p.score ?? 0), 0) / completedProgress.length)
-    : 0
-  const progressPercent = progress.length > 0
-    ? Math.round((completedProgress.length / progress.length) * 100)
-    : 0
+  const avgScore = averageScore(results)
+  const progressPercent = levelProgress(results, student.current_level).percent
 
   async function generateAIPlan() {
     if (!student) return
+    if (localNotes.length === 0) {
+      toast.error('Add a teacher observation before generating an AI plan.')
+      return
+    }
     setAiLoading(true)
     try {
-      let currentLearningReview = learningReview
-      if (!currentLearningReview) {
-        const reportResponse = await fetch(`/api/teacher/student-report?studentId=${encodeURIComponent(studentId)}`)
-        const report = await reportResponse.json()
-        if (reportResponse.ok) {
-          currentLearningReview = `${report.recommendation}\nRecent accuracy by exercise: ${(report.exerciseSummary ?? []).map((item: { label: string; accuracy: number; total: number }) => `${item.label} ${item.accuracy}% (${item.total} questions)`).join('; ') || 'No written-exercise results yet.'}`
-          setLearningReview(currentLearningReview)
-        }
-      }
-      if (localNotes.length === 0 && !currentLearningReview.trim()) {
-        toast.error('Add a teacher observation or load the practice review before generating a plan.')
-        return
-      }
       const res = await fetch('/api/ai/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -113,45 +109,85 @@ export default function StudentDetailPage() {
           level: student.current_level,
           notes: localNotes.map(n => n.content),
           sessionHistory: sessions.map(s => `${s.level} session on ${formatDate(s.created_at)}`),
-          learningReview: currentLearningReview,
         }),
       })
       const data = await res.json()
-      setAiPlan(data.plan ?? '')
+      if (!res.ok || !data.plan) throw new Error(data.error ?? 'Could not generate plan')
+      setAiPlan(data.plan)
+      await persistPlan({ aiPlan: data.plan, teacherEdits: null })
       toast.success('AI plan generated!')
-    } catch {
-      toast.error('Could not generate plan')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not generate plan')
     } finally {
       setAiLoading(false)
     }
   }
 
-  function saveNote() {
+  // Saves the plan (and the teacher's edits to it) on a planned session for this student.
+  async function persistPlan(fields: { aiPlan?: string; teacherEdits?: string | null }) {
+    if (!student) return
+    const body = planSessionId
+      ? { sessionId: planSessionId, ...(fields.aiPlan !== undefined ? { aiPlan: fields.aiPlan } : {}), teacherEdits: fields.teacherEdits ?? '' }
+      : { studentId, level: student.current_level, status: 'planned', aiPlan: fields.aiPlan, teacherEdits: fields.teacherEdits ?? undefined }
+    const response = await fetch('/api/sessions', {
+      method: planSessionId ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const result = await response.json()
+    if (!response.ok) throw new Error(result.error ?? 'Unable to save the plan')
+    setPlanSessionId(result.session.id)
+    setSessions(current => [result.session, ...current.filter(item => item.id !== result.session.id)])
+  }
+
+  async function saveNote() {
     if (!noteText.trim()) return
-    const newNote = {
-      id: `note_local_${Date.now()}`,
-      session_id: null as unknown as string,
-      teacher_id: 'teacher_1',
-      student_id: studentId,
-      content: noteText,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+    setSavingNote(true)
+    try {
+      const response = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, sessionId: sessions.find(item => item.status === 'active')?.id, content: noteText }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error ?? 'Unable to save note')
+      setLocalNotes(current => [result.note, ...current])
+      toast.success('Note saved!')
+      setNoteText('')
+      setNoteDialogOpen(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to save note')
+    } finally {
+      setSavingNote(false)
     }
-    setLocalNotes(n => [newNote, ...n])
-    toast.success('Note saved!')
-    setNoteText('')
-    setNoteDialogOpen(false)
   }
 
-  function savePlanEdit() {
-    setAiPlan(planDraft)
-    setEditingPlan(false)
-    toast.success('Plan saved!')
+  async function savePlanEdit() {
+    try {
+      await persistPlan({ teacherEdits: planDraft })
+      setAiPlan(planDraft)
+      setEditingPlan(false)
+      toast.success('Plan saved!')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to save the plan')
+    }
   }
 
-  function applyLevelChange() {
-    toast.success(`Level change to "${newLevel}" saved! (Requires Supabase to persist)`)
-    setLevelDialogOpen(false)
+  async function applyLevelChange() {
+    try {
+      const response = await fetch('/api/students', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, level: newLevel }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error ?? 'Unable to change level')
+      setSavedStudent(result.student)
+      setLevelDialogOpen(false)
+      toast.success(`Level changed to ${LEVEL_CONFIG[newLevel].label}.`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to change level')
+    }
   }
 
   function openEditDialog() {
@@ -194,9 +230,21 @@ export default function StudentDetailPage() {
     }
   }
 
-  function rateSession(sessionId: string, rating: number) {
-    toast.success(`Session rated ${rating}/5 ⭐`)
-    setRatingDialog(false)
+  async function rateSession(sessionId: string, rating: number) {
+    try {
+      const response = await fetch('/api/sessions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, qualityRating: rating }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error ?? 'Unable to save rating')
+      setSessions(current => current.map(item => item.id === sessionId ? result.session : item))
+      toast.success(`Session rated ${rating}/5 ⭐`)
+      setRatingDialog(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to save rating')
+    }
   }
 
   return (
@@ -245,12 +293,11 @@ export default function StudentDetailPage() {
       </motion.div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue={searchParams.get('tab') === 'ai-plan' ? 'ai-plan' : 'overview'}>
         <TabsList className="mb-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="notes">Notes ({localNotes.length})</TabsTrigger>
           <TabsTrigger value="ai-plan">AI Plan</TabsTrigger>
-          <TabsTrigger value="review">Practice review</TabsTrigger>
           <TabsTrigger value="progress">Progress</TabsTrigger>
         </TabsList>
 
@@ -341,7 +388,7 @@ export default function StudentDetailPage() {
                     </>
                   )}
                   {!editingPlan && (
-                    <Button size="sm" onClick={generateAIPlan} disabled={aiLoading} className="gap-1.5">
+                    <Button size="sm" onClick={generateAIPlan} disabled={aiLoading || localNotes.length === 0} className="gap-1.5">
                       {aiLoading ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</> : <><Brain className="h-3.5 w-3.5" /> {aiPlan ? 'Regenerate' : 'Generate plan'}</>}
                     </Button>
                   )}
@@ -358,7 +405,7 @@ export default function StudentDetailPage() {
                 <div className="text-center py-10 text-gray-400">
                   <Brain className="h-10 w-10 mx-auto mb-3 text-gray-200" />
                   <p className="font-display text-lg mb-1">No plan yet</p>
-                  <p className="text-sm">Generate a plan from your observations, recent practice review, and session history.</p>
+                  <p className="text-sm">Save a teacher observation first, then generate a plan using it and the session history.</p>
                 </div>
               )}
             </CardContent>
@@ -366,42 +413,54 @@ export default function StudentDetailPage() {
 
         </TabsContent>
 
-        <TabsContent value="review">
-          <StudentReport studentId={studentId} onReviewReady={setLearningReview} />
-        </TabsContent>
-
         {/* ── Progress ── */}
         <TabsContent value="progress">
           <div className="space-y-3">
-            {progress.length === 0 ? (
+            {results.length === 0 ? (
               <Card><CardContent className="py-12 text-center text-gray-400">
                 <p className="font-display text-lg mb-1">No progress recorded yet</p>
-                <p className="text-sm">Progress appears here after learning activities</p>
+                <p className="text-sm">Progress appears here after the student completes activities in a session</p>
               </CardContent></Card>
-            ) : progress.map(p => (
-              <Card key={p.id}>
-                <CardContent className="p-4 flex items-center gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-navy-800 capitalize">{p.content_id.replace(/_/g, ' ')}</p>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${
-                        p.status === 'completed'   ? 'bg-mint-100 text-mint-600' :
-                        p.status === 'struggling'  ? 'bg-coral-100 text-coral-600' :
-                        p.status === 'in_progress' ? 'bg-gold-100 text-gold-600' :
-                        'bg-gray-100 text-gray-500'
-                      }`}>{p.status.replace('_', ' ')}</span>
-                      <span className="text-xs text-gray-400">{p.attempts} attempt{p.attempts !== 1 ? 's' : ''}</span>
-                    </div>
-                  </div>
-                  {p.score !== null && (
-                    <div className="text-right flex-shrink-0">
-                      <p className="font-bold text-lg" style={{ color: progressColor(p.score) }}>{p.score}%</p>
-                      <Progress value={p.score} className="w-16 mt-1" indicatorColor={progressColor(p.score)} />
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+            ) : (
+              <>
+                {LEVELS_ORDERED.map(levelKey => {
+                  const lp = levelProgress(results, levelKey)
+                  if (lp.attempts === 0) return null
+                  return (
+                    <Card key={levelKey}>
+                      <CardContent className="p-4 flex items-center gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-navy-800">{LEVEL_CONFIG[levelKey].icon} {LEVEL_CONFIG[levelKey].label}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {lp.completedSets} of {lp.totalSets} activities passed · {lp.attempts} attempt{lp.attempts !== 1 ? 's' : ''} · avg. {lp.avgScore}%
+                          </p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="font-bold text-lg" style={{ color: progressColor(lp.percent) }}>{lp.percent}%</p>
+                          <Progress value={lp.percent} className="w-16 mt-1" indicatorColor={progressColor(lp.percent)} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+                <Card>
+                  <CardHeader><CardTitle>Recent activities</CardTitle></CardHeader>
+                  <CardContent className="p-0">
+                    {results.slice(0, 10).map(result => (
+                      <div key={result.id} className="flex items-center gap-3 px-6 py-3 border-b border-gray-50 last:border-0">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-navy-800 truncate">
+                            {setById(result.exercise_id)?.title ?? LEARN_TITLES[result.level].title}
+                          </p>
+                          <p className="text-xs text-gray-400 capitalize">{result.level} · {result.skill} · {formatDate(result.created_at, 'relative')}</p>
+                        </div>
+                        <span className="font-bold text-sm" style={{ color: progressColor(result.score) }}>{result.score}%</span>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
         </TabsContent>
       </Tabs>
@@ -462,7 +521,7 @@ export default function StudentDetailPage() {
             className="w-full h-36 rounded-xl border-2 border-gray-200 p-3 text-sm resize-none focus:outline-none focus:border-sky-400 transition-colors mt-1" />
           <div className="flex gap-3 justify-end mt-1">
             <Button variant="ghost" onClick={() => setNoteDialogOpen(false)}>Cancel</Button>
-            <Button onClick={saveNote} disabled={!noteText.trim()}>Save note</Button>
+            <Button onClick={saveNote} disabled={!noteText.trim() || savingNote}>{savingNote ? 'Saving…' : 'Save note'}</Button>
           </div>
         </DialogContent>
       </Dialog>

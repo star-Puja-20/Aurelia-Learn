@@ -1,5 +1,5 @@
 'use client'
-import React from 'react'
+import React, { useMemo } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Users, BookOpen, TrendingUp, Clock, UserPlus, BarChart3, Play, ChevronRight, Brain } from 'lucide-react'
@@ -8,10 +8,9 @@ import { Button } from '@/components/ui/button'
 import { LevelBadge } from '@/components/ui/badge'
 import { StudentAvatar } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
-import { getDashboardStats, getStudentCards, MOCK_SESSIONS, MOCK_STUDENTS } from '@/lib/mock-data'
+import { useTeacherData } from '@/lib/use-teacher-data'
+import { buildDashboardStats, buildStudentCards } from '@/lib/progress'
 import { formatDate, progressColor } from '@/lib/utils'
-
-const TEACHER_ID = 'teacher_1'
 
 function getGreeting() {
   const h = new Date().getHours()
@@ -58,11 +57,13 @@ const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } }
 const fadeUp  = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.35 } } }
 
 export default function DashboardPage() {
-  const stats = getDashboardStats(TEACHER_ID)
-  const studentCards = getStudentCards(TEACHER_ID).filter(s => s.isActive).slice(0, 5)
-  const recentSessions = [...MOCK_SESSIONS]
-    .filter(s => s.teacher_id === TEACHER_ID && s.status === 'completed')
-    .sort((a, b) => new Date(b.ended_at ?? 0).getTime() - new Date(a.ended_at ?? 0).getTime())
+  const { students, sessions, results, loaded, error } = useTeacherData()
+  const allCards = useMemo(() => buildStudentCards(students, sessions, results), [students, sessions, results])
+  const stats = useMemo(() => buildDashboardStats(students, sessions, allCards), [students, sessions, allCards])
+  const studentCards = allCards.filter(s => s.isActive).slice(0, 5)
+  const recentSessions = [...sessions]
+    .filter(s => s.status === 'completed')
+    .sort((a, b) => new Date(b.ended_at ?? b.created_at).getTime() - new Date(a.ended_at ?? a.created_at).getTime())
     .slice(0, 5)
 
   return (
@@ -152,6 +153,14 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
+              {!loaded && <p className="px-6 py-8 text-center text-sm text-gray-400">Loading…</p>}
+              {loaded && error && <p className="px-6 py-8 text-center text-sm text-coral-600">Could not load your students. Please refresh.</p>}
+              {loaded && !error && studentCards.length === 0 && (
+                <div className="px-6 py-8 text-center text-sm text-gray-400">
+                  <p className="font-display text-lg text-gray-500 mb-1">No students yet</p>
+                  <Link href="/teacher/students/new" className="font-semibold text-sky-500 hover:underline">Add your first student</Link>
+                </div>
+              )}
               {studentCards.map(s => (
                 <Link key={s.id} href={`/teacher/students/${s.id}`} className="block">
                   <div className="flex items-center gap-3 px-6 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
@@ -185,8 +194,11 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
+              {loaded && !error && recentSessions.length === 0 && (
+                <p className="px-6 py-8 text-center text-sm text-gray-400">No completed sessions yet</p>
+              )}
               {recentSessions.map(session => {
-                const student = MOCK_STUDENTS.find(s => s.id === session.student_id)
+                const student = students.find(s => s.id === session.student_id)
                 if (!student) return null
                 return (
                   <Link key={session.id} href={`/teacher/students/${student.id}`} className="block">

@@ -1,20 +1,35 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Toaster } from 'sonner'
 import './globals.css'
 import { cn } from "@/lib/utils";
+import { CookieConsent } from '@/components/consent/cookie-consent'
 
-export const viewport = {
+function resolveSiteUrl() {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000')
+  } catch {
+    return new URL('http://localhost:3000')
+  }
+}
+
+// Pinch-zoom stays enabled (no maximumScale) for accessibility.
+export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
   themeColor: '#4FC3F7',
 }
 
+const description = 'An interactive English learning platform for children — helping young learners grow from letters to conversations.'
+
 export const metadata: Metadata = {
+  metadataBase: resolveSiteUrl(),
+  applicationName: 'Aurelia Learn',
   title: { default: 'Aurelia Learn', template: '%s | Aurelia Learn' },
-  description: 'An interactive English learning platform for children — helping young learners grow from letters to conversations.',
+  description,
   keywords: ['English learning', 'children', 'education', 'ESL', 'phonics', 'reading'],
   authors: [{ name: 'Aurelia Learn' }],
+  openGraph: { type: 'website', siteName: 'Aurelia Learn', title: 'Aurelia Learn', description },
+  twitter: { card: 'summary_large_image', title: 'Aurelia Learn', description },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -40,6 +55,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             style: { fontFamily: 'Nunito, sans-serif', borderRadius: '12px' },
           }}
         />
+        <CookieConsent />
       </body>
     </html>
   )

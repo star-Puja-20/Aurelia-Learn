@@ -1,6 +1,7 @@
 'use client'
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -13,10 +14,9 @@ import { Eye, EyeOff } from 'lucide-react'
 import { normalizeUsername, USERNAME_PATTERN } from '@/lib/auth-validation'
 
 const schema = z.object({
-  fullName: z.string().min(2, 'Enter your full name'),
-  email: z.string().trim().email('Enter a valid email address'),
+  fullName: z.string().min(2, 'Enter your full name').max(100, 'At most 100 characters'),
   username: z.string().trim().regex(USERNAME_PATTERN, 'Use 3-30 letters, numbers, underscores, or hyphens'),
-  password: z.string().min(8, 'At least 8 characters'),
+  password: z.string().min(8, 'At least 8 characters').max(72, 'At most 72 characters'),
   confirm: z.string(),
   consent: z.literal(true, { errorMap: () => ({ message: 'Please agree before creating your account' }) }),
 }).refine(d => d.password === d.confirm, { message: 'Passwords do not match', path: ['confirm'] })
@@ -68,7 +68,7 @@ export default function RegisterPage() {
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: normalizeUsername(data.username), email: data.email.trim().toLowerCase(), password: data.password, fullName: data.fullName, privacyConsent: data.consent }),
+        body: JSON.stringify({ username: normalizeUsername(data.username), password: data.password, fullName: data.fullName, privacyConsent: data.consent }),
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error ?? 'Unable to create your account.')
@@ -95,7 +95,6 @@ export default function RegisterPage() {
           <CardContent className="p-5 sm:p-8">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-5">
               <Input label="Full name" error={errors.fullName?.message} {...register('fullName')} />
-              <Input label="Email address" type="email" autoComplete="email" error={errors.email?.message} {...register('email')} />
               <Input label="Username" hint={usernameStatus === 'available' ? 'Username is available.' : usernameStatus === 'taken' ? 'That username is already taken.' : usernameStatus === 'checking' ? 'Checking availability…' : 'Use 3-30 letters, numbers, underscores, or hyphens'} error={errors.username?.message} {...register('username')} />
               <div className="relative">
                 <Input label="Password" type={showPassword ? 'text' : 'password'} error={errors.password?.message} {...register('password')} />
@@ -113,7 +112,7 @@ export default function RegisterPage() {
                 <input type="checkbox" className="mt-1 h-4 w-4 accent-sky-500" {...register('consent')} />
                 <span>
                   I agree that Aurelia Learn may store my account details, teacher observations, and learning data to provide and improve the service.
-                  <span className="block text-xs text-gray-400 mt-1">You can request access to or deletion of your data.</span>
+                  <span className="block text-xs text-gray-500 mt-1">You can request access to or deletion of your data. Read the <Link href="/legal/privacy" target="_blank" rel="noopener" className="underline">Privacy Policy</Link> and <Link href="/legal/terms" target="_blank" rel="noopener" className="underline">Terms &amp; Conditions</Link>.</span>
                 </span>
               </label>
               {errors.consent?.message && <p className="text-sm text-coral-600">{errors.consent.message}</p>}

@@ -55,8 +55,6 @@ export function TeacherSidebar({ teacherName = 'Teacher', isAdministrator = fals
 
   async function handleLogout() {
     await createClient().auth.signOut()
-    document.cookie = 'demo_session=; max-age=0; path=/'
-    document.cookie = 'demo_role=; max-age=0; path=/'
     router.push('/auth/login')
   }
 

@@ -18,10 +18,19 @@
    - `005_fix_profile_rls.sql`
    - `006_phone_auth_profiles.sql`
    - `007_username_auth.sql` - adds username storage and case-insensitive uniqueness
-3. Run each file completely before running the next one. Do not run `007_username_auth.sql` by itself on a new Supabase project.
+   - `20261001122755_restrict_profile_role_updates.sql` - stops users editing their own role
+   - `20261006143728_student_game_profiles.sql` - stores per-student learning progress
+   - `20261006145912_remove_learner_points.sql` - removes legacy XP and coin fields
+   - `20261013051057_student_exercise_reports.sql` - stores detailed student exercise reports
+   - `20261015052222_remove_student_pin_columns.sql` - removes legacy student PIN columns
+   - `20261110085900_enforce_student_ownership.sql` - sessions and notes can only point at the teacher's own students
+   - `20261110090000_harden_rls_and_grants.sql` - profiles are read-only from the browser and anonymous access is revoked
+   - `20261110100000_exercise_results.sql` - stores the results of reading, listening and written activities
+3. In **Authentication → Providers**, turn off public sign-ups: accounts are created by the server only.
+   Run each file completely before running the next one. Do not run `007_username_auth.sql` by itself on a new Supabase project.
 4. Go to **Settings → API** and copy:
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
-   - `anon public key` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `publishable (anon) key` → `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
    - `service_role key` → `SUPABASE_SERVICE_ROLE_KEY`
 
 ## Step 2: API Keys

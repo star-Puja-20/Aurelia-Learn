@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const exerciseSummary = [...categoryTotals.entries()].map(([type, totals]) => ({
+    const exerciseSummary = Array.from(categoryTotals.entries()).map(([type, totals]) => ({
       type,
       label: TYPE_LABELS[type] ?? type.replace(/_/g, ' '),
       ...totals,
